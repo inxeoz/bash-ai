@@ -88,9 +88,10 @@ bash-ai() {
     printf '\r\033[K'
 
     if (( exit_code == 0 )) && [[ -n "$cmd" ]] && [[ "$cmd" != "Error:"* ]] && [[ "$cmd" != "API Error:"* ]]; then
-        # Stage the command; the Ctrl-G hook inserts it on an empty line
+        # Stage the command; the Ctrl-G hook inserts it on an empty line.
+        # The status line is green; the model's command stays uncolored.
         printf '%s\n' "$cmd" > "$BASH_AI_PENDING_FILE"
-        echo "Command ready. Press Ctrl-G to insert:"
+        printf '\033[32mCommand ready. Press Ctrl-G to insert:\033[0m\n'
         echo "$cmd"
     else
         echo ""
