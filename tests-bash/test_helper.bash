@@ -185,8 +185,6 @@ setup_test_env() {
     # Set test environment variables
     export BASH_AI_PROVIDER=""
     export ANTHROPIC_API_KEY=""
-    unset BASH_AI_TRIGGER
-    unset BASH_AI_COMMENT_HOOK
     unset BASH_AI_OPENAI_THINKING
     unset BASH_AI_OPENAI_REASONING_EFFORT
     unset BASH_AI_PROMPT_EXTEND
@@ -207,8 +205,6 @@ teardown_test_env() {
     unset -f curl 2>/dev/null
     unset BASH_AI_PROVIDER
     unset ANTHROPIC_API_KEY
-    unset BASH_AI_TRIGGER
-    unset BASH_AI_COMMENT_HOOK
     unset BASH_AI_TEST_MODE
     rm -f "$BASH_AI_PENDING_FILE"
     unset BASH_AI_PENDING_FILE

@@ -132,11 +132,18 @@ export ZSH_AI_COMMENT_HOOK="false"
 ## bash-ai (bash port)
 
 `bash-ai.plugin.bash` + `lib-bash/` are a port of this plugin for bash.
-Source it from `~/.bashrc` instead of the zsh plugin. The bash port uses
-`bind -x` + `READLINE_LINE` instead of zle, binds both `\C-j` and `\C-m`
-(terminals vary on which one Enter sends), and runs the query
-synchronously (bash prints job specs for background jobs even with job
-control off). All config variables are `BASH_AI_*` instead of `ZSH_AI_*`.
+Source it from `~/.bashrc` instead of the zsh plugin. All config
+variables are `BASH_AI_*` instead of `ZSH_AI_*`.
+
+The port does **not** intercept Enter: normal commands keep 100% native
+readline display (intercepting Enter in bash desyncs readline's cursor
+tracking and eats prompt renders). Instead, `Ctrl-G` ("generate") turns
+the current line into a query:
+
+```bash
+$ show top 5 largest files here     # type, then press Ctrl-G
+$ find . -type f -printf '%s %p\n' | sort -nr | head -5   # command replaces the line
+```
 
 ```bash
 # bash-ai — any OpenAI-compatible endpoint works (Groq, LM Studio, ...)
@@ -150,6 +157,6 @@ export BASH_AI_OPENAI_REASONING_EFFORT="low"
 source ~/path/to/bash-ai.plugin.bash
 ```
 
-Usage is the same: `# query` on its own line, or `bash-ai "query"`.
-`bash-ai "query"` prints the command and stages it; pressing Enter on an
-empty line inserts it into the prompt (bash has no `print -z`).
+`bash-ai "query"` prints the generated command and stages it; pressing
+Ctrl-G on an empty line inserts it into the prompt (bash has no
+`print -z`). A `,, query` alias is a handy shorthand.

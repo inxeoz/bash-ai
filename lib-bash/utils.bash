@@ -52,8 +52,8 @@ _bash_ai_query() {
 
 # Direct command: bash-ai "find large files modified this week"
 # Bash cannot push text into the prompt from a plain function, so the
-# generated command is staged in a pending file; pressing Enter on an
-# empty line inserts it (handled by the Enter hook in widget.bash).
+# generated command is staged in a pending file; pressing Ctrl-G on an
+# empty line inserts it (handled by the Ctrl-G hook in widget.bash).
 bash-ai() {
     if [[ $# -eq 0 ]]; then
         echo "Usage: bash-ai \"your natural language command\""
@@ -88,9 +88,9 @@ bash-ai() {
     printf '\r\033[K'
 
     if (( exit_code == 0 )) && [[ -n "$cmd" ]] && [[ "$cmd" != "Error:"* ]] && [[ "$cmd" != "API Error:"* ]]; then
-        # Stage the command; the Enter hook inserts it on an empty line
+        # Stage the command; the Ctrl-G hook inserts it on an empty line
         printf '%s\n' "$cmd" > "$BASH_AI_PENDING_FILE"
-        echo "Command ready. Press Enter to insert:"
+        echo "Command ready. Press Ctrl-G to insert:"
         echo "$cmd"
     else
         echo ""

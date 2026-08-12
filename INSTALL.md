@@ -216,16 +216,16 @@ source ~/path/to/bash-ai.plugin.bash
 
 Differences from the zsh plugin:
 
-- The Enter hook uses `bind -x` + `READLINE_LINE` instead of zle, and binds
-  both `\C-j` and `\C-m` (terminals vary on which one Enter sends).
+- Enter is not intercepted: normal commands keep native bash display
+  (intercepting Enter desyncs readline's cursor tracking). Instead,
+  `Ctrl-G` turns the current line into a query and replaces it with the
+  generated command.
 - Queries run synchronously: bash prints a job spec (`[1] pid`) for every
   background job even with job control off, so the loading indicator is
   static instead of animated.
 - `bash-ai "query"` cannot push into the prompt (`print -z` is zsh-only). It
-  prints the generated command and stages it; pressing Enter on an empty
+  prints the generated command and stages it; pressing Ctrl-G on an empty
   line inserts it into the prompt.
-- Commands are executed through `eval` (bash has no `.accept-line`
-  delegate), so aliases defined in `~/.bashrc` do not expand.
 
 ## Verify
 

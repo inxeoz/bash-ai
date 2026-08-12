@@ -105,33 +105,11 @@ test_rejects_missing_custom_provider_function() {
     teardown_test_env
 }
 
-test_comment_hook_enabled_by_default() {
+test_default_pending_file() {
     setup_test_env
-    unset BASH_AI_COMMENT_HOOK
+    unset BASH_AI_PENDING_FILE
     source "$PLUGIN_DIR/lib-bash/config.bash"
-    _bash_ai_comment_hook_enabled
-    local result=$?
-    assert_equals "$result" "0"
-    teardown_test_env
-}
-
-test_comment_hook_can_be_disabled() {
-    setup_test_env
-    local value
-    for value in false off no 0 disabled FALSE Off; do
-        export BASH_AI_COMMENT_HOOK="$value"
-        _bash_ai_comment_hook_enabled
-        assert_equals "$?" "1"
-    done
-    unset BASH_AI_COMMENT_HOOK
-    teardown_test_env
-}
-
-test_default_trigger_is_hash() {
-    setup_test_env
-    unset BASH_AI_TRIGGER
-    source "$PLUGIN_DIR/lib-bash/config.bash"
-    assert_equals "$BASH_AI_TRIGGER" "# "
+    assert_equals "$BASH_AI_PENDING_FILE" "/tmp/bash-ai-pending"
     teardown_test_env
 }
 
@@ -147,7 +125,5 @@ run_test "Validates gemini provider" test_validates_gemini_provider
 run_test "Validates openai provider" test_validates_openai_provider
 run_test "Validates custom provider" test_validates_custom_provider
 run_test "Rejects missing custom provider function" test_rejects_missing_custom_provider_function
-run_test "Comment hook enabled by default" test_comment_hook_enabled_by_default
-run_test "Comment hook can be disabled" test_comment_hook_can_be_disabled
-run_test "Default trigger is '# '" test_default_trigger_is_hash
+run_test "Default pending file is /tmp/bash-ai-pending" test_default_pending_file
 finish_tests

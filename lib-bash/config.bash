@@ -21,21 +21,9 @@
 : ${BASH_AI_MISTRAL_URL:="https://api.mistral.ai/v1/chat/completions"}  # Default Mistral URL
 
 # Inline trigger configuration
-: ${BASH_AI_COMMENT_HOOK:="true"}  # Set to false/off/no/0 to disable the inline trigger widget entirely
-: ${BASH_AI_TRIGGER:="# "}  # Prompt prefix that triggers AI (e.g. ",," instead of "# ")
-: ${BASH_AI_PENDING_FILE:="/tmp/bash-ai-pending"}  # Scratch file used by `bash-ai "..."` to hand the command to the Enter hook
-
-# Return 0 if the inline trigger widget should be enabled, 1 otherwise
-_bash_ai_comment_hook_enabled() {
-    case "${BASH_AI_COMMENT_HOOK,,}" in
-        false|off|no|0|disabled) return 1 ;;
-        *) return 0 ;;
-    esac
-}
-
-# Optional: Extend the system prompt with custom instructions
-# BASH_AI_PROMPT_EXTEND - Add custom instructions to the AI prompt without replacing the core prompt
-# Example: export BASH_AI_PROMPT_EXTEND="Always prefer ripgrep (rg) over grep. Use modern CLI tools when available."
+# (The Enter hook was dropped in the bash port: intercepting Enter
+# desyncs readline's display. Use Ctrl-G or the ,, alias instead.)
+: ${BASH_AI_PENDING_FILE:="/tmp/bash-ai-pending"}  # Scratch file used by `bash-ai "..."` to hand the command to the Ctrl-G hook
 
 # Provider validation
 _bash_ai_validate_config() {
