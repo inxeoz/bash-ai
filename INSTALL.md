@@ -204,6 +204,21 @@ Oh My Zsh users should keep the provider block above the line that loads Oh My Z
 Use `bash-ai.plugin.bash` + `lib-bash/` when your shell is bash. All config
 variables use the `BASH_AI_*` prefix, and the direct command is `bash-ai`.
 
+### One-shot install
+
+```bash
+./setup.sh                      # clones the repo into ~/.config/bash-ai/repo,
+                                # creates ~/.config/bash-ai/config.sh,
+                                # and wires the source line into ~/.bashrc
+./setup.sh <repo-url> <dir>     # custom URL / install dir
+```
+
+Rerun it after changes to update the clone and repoint `config.sh`. The
+script is idempotent: it skips the `~/.bashrc` wiring when already present
+and keeps an existing `config.sh` (just refreshing its plugin source line).
+
+### Manual install
+
 ```bash
 # In ~/.bashrc, provider block above the load line:
 export BASH_AI_PROVIDER="openai"
