@@ -1,0 +1,204 @@
+#!/usr/bin/env zsh
+
+# Tests for Grok provider
+
+# Source test helper and the files we're testing
+source "${0:A:h}/../test_helper.zsh"
+source "${PLUGIN_DIR}/lib/config.zsh"
+source "${PLUGIN_DIR}/lib/context.zsh"
+source "${PLUGIN_DIR}/lib/providers/grok.zsh"
+source "${PLUGIN_DIR}/lib/utils.zsh"
+
+# Mock curl to test API interactions
+curl() {
+    if [[ "$*" == *"${ZSH_AI_GROK_URL}"* ]]; then
+        # Simulate successful response
+        cat <<EOF
+{
+    "choices": [
+        {
+            "message": {
+                "content": "ls -la"
+            }
+        }
+    ]
+}
+EOF
+        return 0
+    fi
+    # Call real curl for other requests
+    command curl "$@"
+}
+
+test_grok_query_success() {
+    export XAI_API_KEY="test-key"
+    export ZSH_AI_GROK_MODEL="grok-4.3"
+
+    local result=$(_zsh_ai_query_grok "list files")
+    assert_equals "$result" "ls -la"
+}
+
+test_grok_query_error_response() {
+    export XAI_API_KEY="test-key"
+    export ZSH_AI_GROK_MODEL="grok-4.3"
+
+    # Override curl to return an error
+    curl() {
+        if [[ "$*" == *"${ZSH_AI_GROK_URL}"* ]]; then
+            cat <<EOF
+{
+    "error": {
+        "message": "Invalid API key"
+    }
+}
+EOF
+            return 0
+        fi
+        command curl "$@"
+    }
+
+    local result=$(_zsh_ai_query_grok "list files")
+    assert_contains "$result" "API Error:"
+}
+
+test_grok_json_escaping() {
+    export XAI_API_KEY="test-key"
+    export ZSH_AI_GROK_MODEL="grok-4.3"
+
+    # Test with special characters
+    local result=$(_zsh_ai_query_grok "test \"quotes\" and \$variables")
+    # Should not fail due to JSON escaping issues
+    assert_not_empty "$result"
+}
+
+test_handles_response_with_newline() {
+    export XAI_API_KEY="test-key"
+    export ZSH_AI_GROK_MODEL="grok-4.3"
+
+    # Override curl to return response with newline
+    curl() {
+        if [[ "$*" == *"${ZSH_AI_GROK_URL}"* ]]; then
+            cat <<EOF
+{
+    "choices": [
+        {
+            "message": {
+                "content": "cd /home"
+            }
+        }
+    ]
+}
+EOF
+            return 0
+        fi
+        return 1
+    }
+
+    local result=$(_zsh_ai_query_grok "go home")
+    assert_equals "$result" "cd /home"
+}
+
+test_handles_response_without_jq() {
+    export XAI_API_KEY="test-key"
+    export ZSH_AI_GROK_MODEL="grok-4.3"
+
+    # Mock jq as unavailable
+    command() {
+        if [[ "$1" == "-v" && "$2" == "jq" ]]; then
+            return 1
+        fi
+        builtin command "$@"
+    }
+
+    # Override curl for consistent response
+    curl() {
+        if [[ "$*" == *"${ZSH_AI_GROK_URL}"* ]]; then
+            echo '{"choices":[{"message":{"content":"echo test"}}]}'
+            return 0
+        fi
+        builtin command curl "$@"
+    }
+
+    local result=$(_zsh_ai_query_grok "echo test")
+    assert_equals "$result" "echo test"
+}
+
+test_uses_configurable_api_url() {
+    export XAI_API_KEY="test-key"
+    export ZSH_AI_GROK_MODEL="grok-4.3"
+    export ZSH_AI_GROK_URL="https://custom.grok.api/v1/chat/completions"
+
+    # Override curl to check the custom URL is used
+    curl() {
+        if [[ "$*" == *"https://custom.grok.api/v1/chat/completions"* ]]; then
+            echo '{"choices":[{"message":{"content":"custom url works"}}]}'
+            return 0
+        fi
+        return 1
+    }
+
+    local result=$(_zsh_ai_query_grok "test")
+    assert_equals "$result" "custom url works"
+
+    # Reset to default
+    export ZSH_AI_GROK_URL="https://api.x.ai/v1/chat/completions"
+}
+
+# Capture the JSON --data payload sent to the Grok API
+capture_grok_payload() {
+    export XAI_API_KEY="test-key"
+    export ZSH_AI_GROK_MODEL="grok-4.3"
+    local payload_file=$(mktemp)
+
+    curl() {
+        if [[ "$*" == *"${ZSH_AI_GROK_URL}"* ]]; then
+            local prev_arg=""
+            for arg in "$@"; do
+                if [[ "$prev_arg" == "--data" ]]; then
+                    echo "$arg" > "$payload_file"
+                    break
+                fi
+                prev_arg="$arg"
+            done
+            echo '{"choices":[{"message":{"content":"test"}}]}'
+            return 0
+        fi
+        command curl "$@"
+    }
+
+    _zsh_ai_query_grok "test" >/dev/null
+    local captured_payload=$(cat "$payload_file")
+    rm -f "$payload_file"
+    printf "%s" "$captured_payload"
+}
+
+test_uses_max_completion_tokens() {
+    assert_contains "$(capture_grok_payload)" '"max_completion_tokens"'
+}
+
+test_uses_xai_api_key() {
+    export XAI_API_KEY="test-secret-key"
+    export ZSH_AI_GROK_MODEL="grok-4.3"
+
+    # Test that the function uses XAI_API_KEY (not OPENAI_API_KEY)
+    # If XAI_API_KEY is set, the query should succeed
+    local result=$(_zsh_ai_query_grok "test")
+    assert_not_empty "$result"
+}
+
+test_uses_reasoning_effort_none() {
+    assert_contains "$(capture_grok_payload)" '"reasoning_effort": "none"'
+}
+
+# Run tests
+echo "Running Grok provider tests..."
+run_test "Grok query success" test_grok_query_success
+run_test "Grok error response handling" test_grok_query_error_response
+run_test "Grok JSON escaping" test_grok_json_escaping
+run_test "Handles response with trailing newline" test_handles_response_with_newline
+run_test "Handles response without jq and with newline" test_handles_response_without_jq
+run_test "Uses configurable API URL (ZSH_AI_GROK_URL)" test_uses_configurable_api_url
+run_test "Uses max_completion_tokens parameter" test_uses_max_completion_tokens
+run_test "Uses reasoning_effort=none parameter" test_uses_reasoning_effort_none
+run_test "Uses XAI_API_KEY environment variable" test_uses_xai_api_key
+finish_tests

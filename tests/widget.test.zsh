@@ -1,0 +1,526 @@
+#!/usr/bin/env zsh
+
+# Load test helper
+source "${0:A:h}/test_helper.zsh"
+
+# Load required modules
+source "$PLUGIN_DIR/lib/config.zsh"
+source "$PLUGIN_DIR/lib/context.zsh"
+source "$PLUGIN_DIR/lib/utils.zsh"
+source "$PLUGIN_DIR/lib/widget.zsh"
+
+# Test functions
+
+test_widget_initialization_registers_precmd_hook() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+
+    # Track add-zsh-hook calls
+    typeset -ga HOOK_CALLS
+    HOOK_CALLS=()
+    add-zsh-hook() {
+        HOOK_CALLS+=("$1:$2:$3")
+    }
+
+    # Mock autoload
+    autoload() {
+        # No-op for testing
+    }
+
+    _zsh_ai_init_widget
+
+    # Should have registered a precmd hook
+    assert_equals "${HOOK_CALLS[1]}" "precmd:_zsh_ai_do_init:"
+
+    teardown_test_env
+}
+
+test_widget_init_hook_registers_widget_and_removes_itself() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+
+    # Track add-zsh-hook calls
+    typeset -ga HOOK_CALLS
+    HOOK_CALLS=()
+    add-zsh-hook() {
+        HOOK_CALLS+=("$1:$2:$3")
+    }
+
+    # Mock autoload
+    autoload() {
+        # No-op for testing
+    }
+
+    # Mock ZLE functions
+    typeset -gA MOCKED_WIDGETS
+    zle() {
+        case "$1" in
+            "-N")
+                MOCKED_WIDGETS[$2]="$3"
+                ;;
+        esac
+    }
+
+    # Initialize widget (registers the hook)
+    _zsh_ai_init_widget
+
+    # Simulate the precmd hook being called
+    _zsh_ai_do_init
+
+    # Should have registered the widget
+    assert_equals "${MOCKED_WIDGETS[accept-line]}" "_zsh_ai_accept_line"
+
+    # Should have removed the hook (second call with -d flag)
+    assert_equals "${HOOK_CALLS[2]}" "-d:precmd:_zsh_ai_do_init"
+
+    teardown_test_env
+}
+
+test_normal_commands_execute_without_ai_processing() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    local ACCEPT_LINE_CALLED=0
+    zle() {
+        case "$1" in
+            ".accept-line")
+                ACCEPT_LINE_CALLED=1
+                ;;
+        esac
+    }
+    
+    BUFFER="ls -la"
+    _zsh_ai_accept_line
+    
+    assert_equals "$ACCEPT_LINE_CALLED" "1"
+    
+    teardown_test_env
+}
+
+test_multiline_ai_commands_execute_without_processing() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    local ACCEPT_LINE_CALLED=0
+    zle() {
+        case "$1" in
+            ".accept-line")
+                ACCEPT_LINE_CALLED=1
+                ;;
+        esac
+    }
+    
+    BUFFER="# list files
+and show details"
+    _zsh_ai_accept_line
+    
+    assert_equals "$ACCEPT_LINE_CALLED" "1"
+    
+    teardown_test_env
+}
+
+test_ai_commands_starting_with_hash_are_processed() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    # Mock the query function
+    _zsh_ai_query() {
+        echo "ls -la"
+    }
+    
+    # Mock kill to simulate process completion
+    mock_command "kill" "" 1
+    
+    # Mock mktemp and cat
+    mktemp() {
+        echo "/tmp/test.tmp"
+    }
+    mock_command "cat" "ls -la" 0
+    mock_command "rm" "" 0
+    
+    # Mock ZLE functions
+    local RESET_PROMPT_CALLED=0
+    zle() {
+        case "$1" in
+            "reset-prompt")
+                RESET_PROMPT_CALLED=1
+                ;;
+        esac
+    }
+    
+    BUFFER="# list all files"
+    CURSOR=0
+    
+    _zsh_ai_accept_line
+    
+    # Buffer should be replaced with command
+    assert_equals "$BUFFER" "ls -la"
+    assert_equals "$CURSOR" "6"
+    assert_equals "$RESET_PROMPT_CALLED" "1"
+    
+    teardown_test_env
+}
+
+test_handles_api_errors_gracefully() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    # Mock the query function to return error
+    _zsh_ai_query() {
+        echo "Error: API connection failed"
+    }
+    
+    # Mock kill to simulate process completion
+    mock_command "kill" "" 1
+    
+    # Mock mktemp and cat
+    mktemp() {
+        echo "/tmp/test.tmp"
+    }
+    mock_command "cat" "Error: API connection failed" 0
+    mock_command "rm" "" 0
+    
+    # Mock print to capture output
+    local printed_output=""
+    print() {
+        printed_output="$printed_output$@\n"
+    }
+    
+    # Mock ZLE functions
+    zle() {
+        case "$1" in
+            "reset-prompt")
+                ;;
+        esac
+    }
+    
+    BUFFER="# invalid query"
+    
+    _zsh_ai_accept_line
+    
+    # Buffer should be restored on error so the user can edit the query
+    assert_equals "$BUFFER" "# invalid query"
+    assert_contains "$printed_output" "Failed to generate command"
+    assert_contains "$printed_output" "API connection failed"
+    
+    teardown_test_env
+}
+
+test_shows_loading_animation_during_api_call() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    # Mock the query function
+    _zsh_ai_query() {
+        echo "pwd"
+    }
+    
+    # Mock kill to simulate running process then completion
+    local kill_count=0
+    kill() {
+        kill_count=$((kill_count + 1))
+        if [[ $kill_count -le 2 ]]; then
+            return 0  # Process still running
+        else
+            return 1  # Process completed
+        fi
+    }
+    
+    # Mock mktemp and cat
+    mktemp() {
+        echo "/tmp/test.tmp"
+    }
+    mock_command "cat" "pwd" 0
+    mock_command "rm" "" 0
+    
+    # Mock ZLE functions
+    local REDISPLAY_COUNT=0
+    zle() {
+        case "$1" in
+            "redisplay"|"-R")
+                REDISPLAY_COUNT=$((REDISPLAY_COUNT + 1))
+                ;;
+            "reset-prompt")
+                ;;
+        esac
+    }
+    
+    # Mock sleep
+    mock_command "sleep" "" 0
+    
+    BUFFER="# show current directory"
+    
+    _zsh_ai_accept_line
+    
+    # Should have animated
+    assert_greater_than "$REDISPLAY_COUNT" "0"
+    
+    teardown_test_env
+}
+
+test_preserves_original_buffer_during_animation() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    # Mock the query function
+    _zsh_ai_query() {
+        echo "git status"
+    }
+    
+    # Mock kill to simulate process completion
+    mock_command "kill" "" 1
+    
+    # Mock mktemp and cat
+    mktemp() {
+        echo "/tmp/test.tmp"
+    }
+    mock_command "cat" "git status" 0
+    mock_command "rm" "" 0
+    
+    # Mock ZLE functions
+    zle() {
+        case "$1" in
+            "reset-prompt")
+                ;;
+        esac
+    }
+    
+    local original_buffer="# check git status"
+    BUFFER="$original_buffer"
+    
+    _zsh_ai_accept_line
+    
+    # Final buffer should be the command
+    assert_equals "$BUFFER" "git status"
+    
+    teardown_test_env
+}
+
+test_handles_empty_api_response() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    # Mock the query function to return empty
+    _zsh_ai_query() {
+        echo ""
+    }
+    
+    # Mock kill to simulate process completion
+    mock_command "kill" "" 1
+    
+    # Mock mktemp and cat
+    mktemp() {
+        echo "/tmp/test.tmp"
+    }
+    mock_command "cat" "" 0
+    mock_command "rm" "" 0
+    
+    # Mock print to capture output
+    local printed_output=""
+    print() {
+        printed_output="$printed_output$@\n"
+    }
+    
+    # Mock ZLE functions
+    zle() {
+        case "$1" in
+            "reset-prompt")
+                ;;
+        esac
+    }
+    
+    BUFFER="# empty response"
+    
+    _zsh_ai_accept_line
+    
+    # Buffer should be restored on error so the user can edit the query
+    assert_equals "$BUFFER" "# empty response"
+    assert_contains "$printed_output" "Failed to generate command"
+    
+    teardown_test_env
+}
+
+test_uses_temporary_file_for_api_response() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    # Return a predictable temp path
+    local temp_file="/tmp/test.tmp"
+    mktemp() {
+        echo "$temp_file"
+    }
+    
+    # Mock cat and rm
+    mock_command "cat" "echo 'Hello World'" 0
+    mock_command "rm" "" 0
+    
+    # Mock the query function
+    _zsh_ai_query() {
+        echo "echo 'Hello World'"
+    }
+    
+    # Mock kill to simulate process completion
+    mock_command "kill" "" 1
+    
+    # Mock ZLE functions
+    zle() {
+        case "$1" in
+            "reset-prompt")
+                ;;
+        esac
+    }
+    
+    BUFFER="# say hello"
+    
+    _zsh_ai_accept_line
+    
+    assert_called "rm" "1"
+    
+    teardown_test_env
+}
+
+test_handles_commands_with_special_characters() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    
+    # Mock the query function
+    _zsh_ai_query() {
+        echo "echo 'Hello, World!'"
+    }
+    
+    # Mock kill to simulate process completion
+    mock_command "kill" "" 1
+    
+    # Mock mktemp and cat
+    mktemp() {
+        echo "/tmp/test.tmp"
+    }
+    mock_command "cat" "echo 'Hello, World!'" 0
+    mock_command "rm" "" 0
+    
+    # Mock ZLE functions
+    zle() {
+        case "$1" in
+            "reset-prompt")
+                ;;
+        esac
+    }
+    
+    BUFFER="# print greeting"
+    
+    _zsh_ai_accept_line
+    
+    assert_equals "$BUFFER" "echo 'Hello, World!'"
+    
+    teardown_test_env
+}
+
+test_init_widget_skips_registration_when_disabled() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    export ZSH_AI_COMMENT_HOOK="false"
+
+    # Track add-zsh-hook calls
+    typeset -ga HOOK_CALLS
+    HOOK_CALLS=()
+    add-zsh-hook() {
+        HOOK_CALLS+=("$1:$2:$3")
+    }
+    autoload() { :; }
+
+    _zsh_ai_init_widget
+
+    # No precmd hook should have been registered
+    assert_equals "${#HOOK_CALLS[@]}" "0"
+
+    unset ZSH_AI_COMMENT_HOOK
+    teardown_test_env
+}
+
+test_custom_trigger_is_processed() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    export ZSH_AI_TRIGGER=",,"
+
+    # Echo back the query so we can verify the trigger prefix was stripped.
+    # The widget runs this in a background subshell and reads its stdout from a
+    # temp file, so we rely on a real temp file rather than mocking cat/mktemp.
+    _zsh_ai_query() {
+        printf "query:%s" "$1"
+    }
+
+    mock_command "kill" "" 1
+
+    local RESET_PROMPT_CALLED=0
+    zle() {
+        case "$1" in
+            "reset-prompt") RESET_PROMPT_CALLED=1 ;;
+        esac
+    }
+
+    BUFFER=",,list all files"
+    CURSOR=0
+
+    _zsh_ai_accept_line
+
+    # Buffer holds the command produced from the query with the ",," stripped
+    assert_equals "$BUFFER" "query:list all files"
+    assert_equals "$RESET_PROMPT_CALLED" "1"
+
+    export ZSH_AI_TRIGGER="# "
+    teardown_test_env
+}
+
+test_default_hash_ignored_when_trigger_changed() {
+    setup_test_env
+    export ZSH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    export ZSH_AI_TRIGGER=",,"
+
+    local ACCEPT_LINE_CALLED=0
+    zle() {
+        case "$1" in
+            ".accept-line") ACCEPT_LINE_CALLED=1 ;;
+        esac
+    }
+
+    # With a custom trigger, a leading "# " is a normal comment, not a query
+    BUFFER="# list files"
+    _zsh_ai_accept_line
+
+    assert_equals "$ACCEPT_LINE_CALLED" "1"
+
+    export ZSH_AI_TRIGGER="# "
+    teardown_test_env
+}
+
+# Run tests
+echo "Running widget tests..."
+run_test "Widget initialization registers precmd hook" test_widget_initialization_registers_precmd_hook
+run_test "Widget init hook registers widget and removes itself" test_widget_init_hook_registers_widget_and_removes_itself
+run_test "Normal commands execute without AI processing" test_normal_commands_execute_without_ai_processing
+run_test "Multiline AI commands execute without processing" test_multiline_ai_commands_execute_without_processing
+run_test "AI commands starting with # are processed" test_ai_commands_starting_with_hash_are_processed
+run_test "Handles API errors gracefully" test_handles_api_errors_gracefully
+run_test "Shows loading animation during API call" test_shows_loading_animation_during_api_call
+run_test "Preserves original buffer during animation" test_preserves_original_buffer_during_animation
+run_test "Handles empty API response" test_handles_empty_api_response
+run_test "Uses temporary file for API response" test_uses_temporary_file_for_api_response
+run_test "Handles commands with special characters" test_handles_commands_with_special_characters
+run_test "Init widget skips registration when disabled" test_init_widget_skips_registration_when_disabled
+run_test "Custom trigger is processed" test_custom_trigger_is_processed
+run_test "Default '# ' ignored when trigger changed" test_default_hash_ignored_when_trigger_changed
+finish_tests
