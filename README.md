@@ -160,7 +160,8 @@ Answer mode searches the web for free:
 - **Gemini provider**: real Google Search via the API's built-in
   `googleSearch` grounding (free tier, no extra key).
 - **Every other provider**: DuckDuckGo results (no API key) are fetched
-  and fed to the model as context.
+  and fed to the model as context; if DuckDuckGo serves its bot
+  challenge, results automatically fall back to Bing.
 
 If search fails or is disabled, the model still answers from its own
 knowledge. Configure it:
@@ -177,10 +178,18 @@ export BASH_AI_ANSWER_MAX_TOKENS="4096"
 
 # Ctrl-F is readline's forward-char; move the answer key if you use it
 export BASH_AI_ANSWER_KEY="\C-t"
+
+# Render answers through a terminal markdown renderer when one is
+# installed (glow/mdcat/bat), else print raw text
+export BASH_AI_MARKDOWN_RENDERER="auto"   # auto | off | glow | mdcat | bat
 ```
 
 `bash-ai-answer "question"` is the direct-command equivalent (prints the
-answer, no pending file).
+answer, no pending file). Install a renderer for prettier output:
+
+```bash
+brew install glow        # or: sudo apt install glow
+```
 
 ```bash
 # bash-ai — any OpenAI-compatible endpoint works (Groq, LM Studio, ...)

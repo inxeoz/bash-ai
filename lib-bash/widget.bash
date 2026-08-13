@@ -78,7 +78,10 @@ _bash_ai_answer() {
     printf '\r\033[K'
 
     if (( exit_code == 0 )) && [[ -n "$answer" ]] && [[ "$answer" != "Error:"* ]] && [[ "$answer" != "API Error:"* ]]; then
-        printf '\n%s\n\n' "$answer"
+        # Render markdown through glow/mdcat/bat when available, else raw
+        printf '\n'
+        _bash_ai_render_markdown "$answer"
+        printf '\n'
     else
         # Show error - keep it visible
         printf '\n\033[31m❌ Failed to get an answer\033[0m\n'

@@ -549,6 +549,66 @@ test_bash_ai_answer_handles_api_errors() {
     teardown_test_env
 }
 
+# Markdown rendering tests
+
+test_render_off_passes_through_raw() {
+    setup_test_env
+    export BASH_AI_MARKDOWN_RENDERER="off"
+
+    local input='## Header
+
+**bold** and `code`'
+    local output
+    output=$(_bash_ai_render_markdown "$input")
+    assert_equals "$output" "$input"
+
+    teardown_test_env
+}
+
+test_render_explicit_renderer_pipes_through_it() {
+    setup_test_env
+    export BASH_AI_MARKDOWN_RENDERER="mdcat"
+
+    mdcat() {
+        printf 'RENDERED:[%s]' "$(cat)"
+    }
+
+    local output
+    output=$(_bash_ai_render_markdown "# Hello")
+    assert_equals "$output" "RENDERED:[# Hello]"
+
+    unset -f mdcat
+    teardown_test_env
+}
+
+test_render_auto_uses_available_renderer() {
+    setup_test_env
+    export BASH_AI_MARKDOWN_RENDERER="auto"
+
+    # Functions satisfy command -v, so this is deterministic on any machine
+    glow() {
+        printf 'GLOW-MARKER %s' "$(cat)"
+    }
+
+    local output
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "GLOW-MARKER text"
+
+    unset -f glow
+    teardown_test_env
+}
+
+test_render_missing_renderer_falls_back_to_raw() {
+    setup_test_env
+    export BASH_AI_MARKDOWN_RENDERER="no-such-renderer-xyz"
+
+    local output
+    output=$(_bash_ai_render_markdown "## raw text")
+    assert_equals "$output" "## raw text"
+
+    teardown_test_env
+}
+
 # Run tests
 echo "Running utils tests..."
 run_test "Routes to Anthropic provider when configured" test_routes_to_anthropic_provider
@@ -577,4 +637,8 @@ run_test "Command mode does not search the web" test_command_mode_does_not_searc
 run_test "bash-ai-answer prints multiline response" test_bash_ai_answer_prints_multiline_response
 run_test "bash-ai-answer shows usage without arguments" test_bash_ai_answer_shows_usage_without_arguments
 run_test "bash-ai-answer handles API errors" test_bash_ai_answer_handles_api_errors
+run_test "Render off passes through raw text" test_render_off_passes_through_raw
+run_test "Render explicit renderer pipes through it" test_render_explicit_renderer_pipes_through_it
+run_test "Render auto uses an available renderer" test_render_auto_uses_available_renderer
+run_test "Render missing renderer falls back to raw" test_render_missing_renderer_falls_back_to_raw
 finish_tests

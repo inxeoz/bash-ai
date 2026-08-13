@@ -254,7 +254,8 @@ search backend is free:
 - `gemini` (default when `BASH_AI_PROVIDER=gemini`): Google Search via the
   Gemini API's built-in `googleSearch` grounding — no extra key, free tier.
 - `ddg` (default for other providers): DuckDuckGo HTML endpoint — no API
-  key; results are fed to the model as context.
+  key; results are fed to the model as context. Falls back to Bing when
+  DuckDuckGo serves its bot challenge.
 - `off`: no live search, the model answers from its own knowledge.
 
 ```bash
@@ -262,6 +263,14 @@ export BASH_AI_SEARCH_BACKEND="auto"          # auto | gemini | ddg | off
 export BASH_AI_SEARCH_MAX_RESULTS="5"         # DuckDuckGo results cap
 export BASH_AI_ANSWER_MAX_TOKENS="4096"       # answer-mode token budget
 export BASH_AI_ANSWER_KEY="\C-t"              # rebind if you use Ctrl-F for forward-char
+export BASH_AI_MARKDOWN_RENDERER="auto"       # auto | off | glow | mdcat | bat
+```
+
+Answers render through `glow`/`mdcat`/`bat` when one is installed and
+fall back to raw markdown text otherwise. Install a renderer with:
+
+```bash
+brew install glow        # or: sudo apt install glow
 ```
 
 ## Verify

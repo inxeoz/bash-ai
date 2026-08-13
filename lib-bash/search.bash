@@ -26,7 +26,8 @@ _bash_ai_resolve_search_backend() {
 }
 
 # DuckDuckGo HTML backend: scrape the top results and print them as a
-# numbered, header-prefixed block for the model. Prints nothing on failure.
+# numbered, header-prefixed block for the model. Prints nothing on failure
+# (including DDG's bot-challenge pages, which contain no results).
 _bash_ai_search_ddg() {
     local query="$1"
     local html
@@ -37,6 +38,11 @@ _bash_ai_search_ddg() {
         --data-urlencode "q=$query" \
         --data-urlencode "kl=us-en" 2>/dev/null)
     [[ -n "$html" ]] || return 1
+
+    # DDG serves a bot-challenge page instead of results - bail out early
+    if [[ "$html" == *"anomaly"* ]] || [[ "$html" == *"challenge-form"* ]]; then
+        return 1
+    fi
 
     local parsed
     parsed=$(printf '%s' "$html" | perl -0777 -e '
@@ -136,6 +142,93 @@ EOF
     printf 'Web search results (Google):\n\n%s' "$answer"
 }
 
+# Bing backend: fallback when DuckDuckGo serves its bot challenge.
+# Same numbered, header-prefixed output shape as the DDG backend.
+_bash_ai_search_bing() {
+    local query="$1"
+    local html
+
+    html=$(curl -s --max-time 20 \
+        -A "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0" \
+        "https://www.bing.com/search?q=${query// /+}&count=${BASH_AI_SEARCH_MAX_RESULTS:-5}&mkt=en-US" \
+        2>/dev/null)
+    [[ -n "$html" ]] || return 1
+
+    local parsed
+    parsed=$(printf '%s' "$html" | perl -0777 -e '
+use strict;
+use warnings;
+use MIME::Base64;
+my $max = ($ARGV[0] // 5) + 0;
+$max = 5 if $max < 1;
+my $html = <STDIN>;
+my @out;
+my $re = qr{<li class="b_algo".*?>(.*?)(?=<li class="b_algo"|\z)}s;
+while ($html =~ /$re/g) {
+    my $block = $1;
+    next unless $block =~ /<h2/;
+    my ($title) = $block =~ m{<h2[^>]*>.*?<a[^>]*>(.*?)</a>}s;
+    my ($href)  = $block =~ m{<h2[^>]*>.*?<a[^>]*href="([^"]*)"}s;
+    my ($snip)  = $block =~ m{<p class="b_lineclamp2"[^>]*>(.*?)</p>}s;
+    next unless defined $title;
+    for my $s ($title, $snip) {
+        next unless defined $s;
+        $s =~ s/<[^>]+>//g;
+        $s =~ s/&amp;/&/g; $s =~ s/&lt;/</g; $s =~ s/&gt;/>/g;
+        $s =~ s/&quot;/"/g; $s =~ s/&#0*39;/'"'"'/g; $s =~ s/&#x27;/'"'"'/g;
+        $s =~ s/&#x2F;/\//g;
+        $s =~ s/\s+/ /g;
+        $s =~ s/^\s+|\s+$//g;
+    }
+    my $url = "";
+    if (defined $href) {
+        $href =~ s/&amp;/&/g;
+        if ($href =~ /[?&]u=([^&]+)/) {
+            my $u = $1;
+            $u =~ s/%2[bB]/+/g;
+            $u =~ s/\+/ /g;
+            $u =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/eg;
+            $u =~ s/\s+//g;
+            $u .= "=" while length($u) % 4;
+            my $decoded = eval { decode_base64($u) } // "";
+            # Bing sometimes prefixes the base64 with an "a1" marker
+            if ($decoded !~ m{^https?://} && $u =~ s/^a1//) {
+                $u .= "=" while length($u) % 4;
+                $decoded = eval { decode_base64($u) } // "";
+            }
+            $url = $decoded;
+        } else {
+            $url = $href;
+        }
+    }
+    push @out, "$title\t$url\t$snip";
+    last if @out >= $max;
+}
+if (@out) {
+    print "Web search results (Bing):\n\n";
+    for my $i (0 .. $#out) {
+        my ($t, $u, $s) = split /\t/, $out[$i], 3;
+        print "$i. $t\n   $u\n   $s\n" if defined $t;
+    }
+}
+' "$BASH_AI_SEARCH_MAX_RESULTS")
+    [[ -n "$parsed" ]] || return 1
+    printf '%s' "$parsed"
+}
+
+# Try DuckDuckGo first; when it serves a bot challenge (or fails), fall
+# back to Bing so answer mode still gets live results.
+_bash_ai_search_with_fallback() {
+    local query="$1"
+    local out
+    out="$(_bash_ai_search_ddg "$query")"
+    if [[ -n "$out" ]]; then
+        printf '%s' "$out"
+        return 0
+    fi
+    _bash_ai_search_bing "$query"
+}
+
 # Public search entry point: prints a formatted web-results block for the
 # query, or nothing when search is off/failed. "gemini" results are only
 # used as a fallback here - the Gemini provider handles grounding inline.
@@ -154,15 +247,15 @@ _bash_ai_web_search() {
             if [[ -n "$grounded" ]]; then
                 printf '%s' "$grounded"
             else
-                _bash_ai_search_ddg "$query"
+                _bash_ai_search_with_fallback "$query"
             fi
             ;;
         ddg)
-            _bash_ai_search_ddg "$query"
+            _bash_ai_search_with_fallback "$query"
             ;;
         *)
             printf 'bash-ai: Warning: Unknown BASH_AI_SEARCH_BACKEND '\''%s'\'' (use auto, gemini, ddg, or off)\n' "$backend" >&2
-            _bash_ai_search_ddg "$query"
+            _bash_ai_search_with_fallback "$query"
             ;;
     esac
 }

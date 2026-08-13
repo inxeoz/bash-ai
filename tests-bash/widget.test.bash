@@ -297,6 +297,37 @@ test_answer_empty_line_shows_hint() {
     teardown_test_env
 }
 
+test_answer_renders_through_configured_renderer() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+    export BASH_AI_MARKDOWN_RENDERER="mdcat"
+
+    # Fake renderer that swallows its input: if the widget renders, the
+    # raw answer text never reaches the terminal
+    mdcat() {
+        printf 'RENDERED-BLOCK'
+    }
+
+    _bash_ai_query() {
+        printf '# Heading\n\nplain text'
+    }
+
+    local outfile
+    outfile=$(mktemp)
+    call_answer "$outfile" "a question"
+
+    local output
+    output=$(cat "$outfile")
+    assert_contains "$output" "RENDERED-BLOCK"
+    assert_not_contains "$output" "# Heading"
+    assert_not_contains "$output" "plain text"
+
+    unset -f mdcat
+    rm -f "$outfile"
+    teardown_test_env
+}
+
 # Run tests
 echo "Running widget tests..."
 run_test "Line is processed as query" test_line_is_processed_as_query
@@ -311,4 +342,5 @@ run_test "Empty line without pending shows hint" test_empty_line_without_pending
 run_test "Answer prints multiline response without touching the line" test_answer_prints_multiline_response
 run_test "Answer handles API errors gracefully" test_answer_handles_api_errors
 run_test "Answer empty line shows hint" test_answer_empty_line_shows_hint
+run_test "Answer renders through configured renderer" test_answer_renders_through_configured_renderer
 finish_tests

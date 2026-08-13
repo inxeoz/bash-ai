@@ -33,6 +33,11 @@
 : ${BASH_AI_ANSWER_KEY:="\C-f"}  # Readline binding for the answer widget
 : ${BASH_AI_ANSWER_MAX_TOKENS:=4096}  # Token budget for answer-mode responses (command mode stays at 256)
 
+# Markdown rendering for answer mode (Ctrl-F)
+# "auto" renders through the first of glow/mdcat/bat found in PATH and
+# prints raw text when none is installed; "off" always prints raw.
+: ${BASH_AI_MARKDOWN_RENDERER:="auto"}
+
 # Web search configuration (answer mode only)
 # Backend: "auto" = Gemini grounding when BASH_AI_PROVIDER=gemini, else DuckDuckGo;
 # "gemini" = Google Search grounding (Gemini provider only);

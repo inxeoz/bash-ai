@@ -34,6 +34,48 @@ _bash_ai_escape_json() {
     printf '%s' "$1" | perl -0777 -pe 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g; s/\f/\\f/g; s/\x08/\\b/g; s/[\x00-\x07\x0B\x0E-\x1F]//g'
 }
 
+# Render markdown answers through a terminal renderer when one is
+# available; print the raw text otherwise. BASH_AI_MARKDOWN_RENDERER:
+# "auto" (default) = first of glow/mdcat/bat found in PATH, else raw;
+# a command name = use that command (raw when not installed); "off" = raw.
+_bash_ai_render_markdown() {
+    local text="$1"
+    local renderer="${BASH_AI_MARKDOWN_RENDERER:-auto}"
+    local cmd=""
+
+    if [[ "$renderer" == "auto" ]]; then
+        local candidate
+        for candidate in glow mdcat bat; do
+            if command -v "$candidate" &>/dev/null; then
+                cmd="$candidate"
+                break
+            fi
+        done
+    elif [[ "$renderer" != "off" ]] && [[ -n "$renderer" ]]; then
+        command -v "$renderer" &>/dev/null && cmd="$renderer"
+    fi
+
+    if [[ -z "$cmd" ]]; then
+        printf '%s' "$text"
+        return 0
+    fi
+
+    case "$cmd" in
+        glow)
+            printf '%s\n' "$text" | glow -s dark -
+            ;;
+        mdcat)
+            printf '%s\n' "$text" | mdcat
+            ;;
+        bat)
+            printf '%s\n' "$text" | bat --language=markdown --style=plain
+            ;;
+        *)
+            printf '%s\n' "$text" | "$cmd"
+            ;;
+    esac
+}
+
 # Main query function that routes to the appropriate provider
 # mode: "command" (default) or "answer"
 _bash_ai_query() {
@@ -155,7 +197,10 @@ bash-ai-answer() {
     printf '\r\033[K'
 
     if (( exit_code == 0 )) && [[ -n "$answer" ]] && [[ "$answer" != "Error:"* ]] && [[ "$answer" != "API Error:"* ]]; then
-        printf '\n%s\n\n' "$answer"
+        # Render markdown through glow/mdcat/bat when available, else raw
+        printf '\n'
+        _bash_ai_render_markdown "$answer"
+        printf '\n'
     else
         printf '\033[31m❌ Failed to get an answer\033[0m\n'
         if [[ -n "$answer" ]]; then
