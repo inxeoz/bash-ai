@@ -145,6 +145,43 @@ $ show top 5 largest files here     # type, then press Ctrl-G
 $ find . -type f -printf '%s %p\n' | sort -nr | head -5   # command replaces the line
 ```
 
+### Answer mode (Ctrl-F)
+
+Ctrl-F ("find") is for questions, not commands. Type a question and press
+Ctrl-F: the answer — with properly formatted, multi-line code examples —
+is printed to the terminal, and the prompt redraws below it.
+
+```bash
+$ show me a python example of reading a csv   # type, then press Ctrl-F
+```
+
+Answer mode searches the web for free:
+
+- **Gemini provider**: real Google Search via the API's built-in
+  `googleSearch` grounding (free tier, no extra key).
+- **Every other provider**: DuckDuckGo results (no API key) are fetched
+  and fed to the model as context.
+
+If search fails or is disabled, the model still answers from its own
+knowledge. Configure it:
+
+```bash
+# auto (default) | gemini | ddg | off
+export BASH_AI_SEARCH_BACKEND="auto"
+
+# Max DuckDuckGo results fed to the model
+export BASH_AI_SEARCH_MAX_RESULTS="5"
+
+# Token budget for answer-mode responses
+export BASH_AI_ANSWER_MAX_TOKENS="4096"
+
+# Ctrl-F is readline's forward-char; move the answer key if you use it
+export BASH_AI_ANSWER_KEY="\C-t"
+```
+
+`bash-ai-answer "question"` is the direct-command equivalent (prints the
+answer, no pending file).
+
 ```bash
 # bash-ai — any OpenAI-compatible endpoint works (Groq, LM Studio, ...)
 export BASH_AI_PROVIDER="openai"

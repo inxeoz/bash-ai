@@ -235,12 +235,34 @@ Differences from the zsh plugin:
   (intercepting Enter desyncs readline's cursor tracking). Instead,
   `Ctrl-G` turns the current line into a query and replaces it with the
   generated command.
+- `Ctrl-F` turns the line into an *answer* query: multi-line, properly
+  formatted code examples are printed to the terminal, backed by free web
+  search. The command line itself is untouched.
 - Queries run synchronously: bash prints a job spec (`[1] pid`) for every
   background job even with job control off, so the loading indicator is
   static instead of animated.
 - `bash-ai "query"` cannot push into the prompt (`print -z` is zsh-only). It
   prints the generated command and stages it; pressing Ctrl-G on an empty
   line inserts it into the prompt.
+
+### Answer mode (Ctrl-F)
+
+`Ctrl-F` answers questions with web search + formatted code examples.
+`bash-ai-answer "question"` does the same without the keybinding. The
+search backend is free:
+
+- `gemini` (default when `BASH_AI_PROVIDER=gemini`): Google Search via the
+  Gemini API's built-in `googleSearch` grounding — no extra key, free tier.
+- `ddg` (default for other providers): DuckDuckGo HTML endpoint — no API
+  key; results are fed to the model as context.
+- `off`: no live search, the model answers from its own knowledge.
+
+```bash
+export BASH_AI_SEARCH_BACKEND="auto"          # auto | gemini | ddg | off
+export BASH_AI_SEARCH_MAX_RESULTS="5"         # DuckDuckGo results cap
+export BASH_AI_ANSWER_MAX_TOKENS="4096"       # answer-mode token budget
+export BASH_AI_ANSWER_KEY="\C-t"              # rebind if you use Ctrl-F for forward-char
+```
 
 ## Verify
 
