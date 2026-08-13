@@ -32,9 +32,19 @@ type aiResultMsg struct {
 // aiPanelStyle marks the panel area.
 var aiPanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), false, false, true, false)
 
+// session is the shell surface the TUI needs; *shell.Session satisfies
+// it and tests can substitute a fake.
+type session interface {
+	Write([]byte) (int, error)
+	Resize(cols, rows uint16) error
+	Output() <-chan []byte
+	TracksIdle() bool
+	ShellName() string
+}
+
 // Model is the bubbletea state for ai-term.
 type Model struct {
-	sess   *shell.Session
+	sess   session
 	screen *term.Screen
 	busy   bool
 	cfg    ai.Config
@@ -74,7 +84,7 @@ func New(s *shell.Session, cfg ai.Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return waitForShell(m.sess.Out)
+	return waitForShell(m.sess.Output())
 }
 
 func waitForShell(ch <-chan []byte) tea.Cmd {
@@ -105,7 +115,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.busy && m.screen.MarkerSeq != m.markerAtBusy {
 			m.busy = false
 		}
-		return m, waitForShell(m.sess.Out)
+		return m, waitForShell(m.sess.Output())
 
 	case shellExitedMsg:
 		return m, tea.Quit
@@ -158,7 +168,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	// A command just started; idle returns at the next 133;A marker.
 	// Real Enter sends \r (KeyEnter); pasted input can send \n (KeyCtrlJ).
-	if (msg.Type == tea.KeyEnter || msg.Type == tea.KeyCtrlJ) && m.sess.Track {
+	if (msg.Type == tea.KeyEnter || msg.Type == tea.KeyCtrlJ) && m.sess.TracksIdle() {
 		m.busy = true
 		m.markerAtBusy = m.screen.MarkerSeq
 	}
@@ -316,8 +326,8 @@ func (m Model) statusBar() string {
 		state = "busy"
 	}
 	name := "shell"
-	if m.sess.Name != "" {
-		name = m.sess.Name
+	if m.sess.ShellName() != "" {
+		name = m.sess.ShellName()
 	}
 	model := ""
 	if m.cfg.Provider != "" {

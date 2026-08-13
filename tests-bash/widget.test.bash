@@ -220,6 +220,83 @@ test_empty_line_without_pending_shows_hint() {
     teardown_test_env
 }
 
+# Calls the Ctrl-F answer hook directly so READLINE_LINE state is visible
+call_answer() {
+    local outfile="$1"
+    shift
+    READLINE_LINE="$1"
+    _bash_ai_answer > "$outfile" 2>&1
+}
+
+test_answer_prints_multiline_response() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+
+    # Mock the query function to return a multi-line answer
+    _bash_ai_query() {
+        printf 'Here is an example:\n\n```python\nx = 1\nprint(x)\n```'
+    }
+
+    local outfile
+    outfile=$(mktemp)
+    call_answer "$outfile" "show me a python example"
+
+    local output
+    output=$(cat "$outfile")
+
+    # The answer is printed in full with its formatting intact
+    assert_contains "$output" "Here is an example:"
+    assert_contains "$output" '```python'
+    assert_contains "$output" "print(x)"
+    assert_not_contains "$output" "Failed to get an answer"
+
+    # The command line is untouched
+    assert_equals "$READLINE_LINE" "show me a python example"
+
+    rm -f "$outfile"
+    teardown_test_env
+}
+
+test_answer_handles_api_errors() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+
+    _bash_ai_query() {
+        printf "API Error: connection failed"
+    }
+
+    local outfile
+    outfile=$(mktemp)
+    call_answer "$outfile" "some question"
+
+    local output
+    output=$(cat "$outfile")
+    assert_contains "$output" "Failed to get an answer"
+    assert_contains "$output" "API Error: connection failed"
+
+    rm -f "$outfile"
+    teardown_test_env
+}
+
+test_answer_empty_line_shows_hint() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+
+    local outfile
+    outfile=$(mktemp)
+    call_answer "$outfile" ""
+
+    local output
+    output=$(cat "$outfile")
+    assert_contains "$output" "Ctrl-F"
+
+    rm -f "$outfile"
+    teardown_test_env
+}
+
 # Run tests
 echo "Running widget tests..."
 run_test "Line is processed as query" test_line_is_processed_as_query
@@ -231,4 +308,7 @@ run_test "Handles commands with special characters" test_handles_commands_with_s
 run_test "Inserts pending command on empty line" test_inserts_pending_command_on_empty_line
 run_test "Ignores pending when line is not empty" test_ignores_pending_when_line_is_not_empty
 run_test "Empty line without pending shows hint" test_empty_line_without_pending_shows_hint
+run_test "Answer prints multiline response without touching the line" test_answer_prints_multiline_response
+run_test "Answer handles API errors gracefully" test_answer_handles_api_errors
+run_test "Answer empty line shows hint" test_answer_empty_line_shows_hint
 finish_tests

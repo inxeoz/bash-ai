@@ -154,6 +154,9 @@ mock_jq() {
             elif [[ "$args" == *".candidates[0].content.parts[0].text"* ]]; then
                 # For Gemini responses
                 result=$(printf "%s" "$input" | grep -o '"text":"[^"]*"' | head -1 | sed 's/"text":"\([^"]*\)"/\1/')
+            elif [[ "$args" == *".web.uri"* ]]; then
+                # For Gemini grounding sources - one URI per line
+                result=$(printf "%s" "$input" | grep -o '"uri":"[^"]*"' | sed 's/"uri":"\([^"]*\)"/\1/')
             elif [[ "$args" == *".choices[0].message.content"* ]]; then
                 # For OpenAI-compatible responses
                 result=$(printf "%s" "$input" | sed -n 's/.*"content":"\([^"]*\(\\.[^"]*\)*\)".*/\1/p' | sed 's/\\"/"/g')

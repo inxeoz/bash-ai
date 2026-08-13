@@ -3,15 +3,30 @@
 # Google Gemini API provider for bash-ai
 
 # Function to call Gemini API
+# mode: "command" (default) or "answer". In answer mode with the gemini
+# search backend, Google Search grounding is enabled inline so the model
+# answers from live web results.
 _bash_ai_query_gemini() {
     local query="$1"
+    local mode="${2:-command}"
+    local search_backend="${3:-auto}"
     local response
     
     # Build context
     local context=$(_bash_ai_build_context)
     local escaped_context=$(_bash_ai_escape_json "$context")
-    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context")
+    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context" "$mode")
     local escaped_system_prompt=$(_bash_ai_escape_json "$system_prompt")
+
+    # Answer mode gets a bigger token budget for code examples
+    local max_output_tokens=256
+    [[ "$mode" == "answer" ]] && max_output_tokens="${BASH_AI_ANSWER_MAX_TOKENS:-4096}"
+
+    # Google Search grounding for answer mode (gemini backend)
+    local grounding_tool=""
+    if [[ "$mode" == "answer" ]] && [[ "$search_backend" == "gemini" ]]; then
+        grounding_tool=$',\n    "tools": [\n        {\n            "googleSearch": {}\n        }\n    ]'
+    fi
     
     # Prepare the JSON payload - escape quotes in the query
     local escaped_query=$(_bash_ai_escape_json "$query")
@@ -36,11 +51,11 @@ _bash_ai_query_gemini() {
     },
     "generationConfig": {
         "temperature": 0.3,
-        "maxOutputTokens": 256,
+        "maxOutputTokens": $max_output_tokens,
         "thinkingConfig": {
             "thinkingBudget": 0
         }
-    }
+    }${grounding_tool}
 }
 EOF
 )
@@ -72,9 +87,23 @@ EOF
             fi
             return 1
         fi
-        # Clean up the response - remove newlines and trailing whitespace
-        # Commands should be single-line for shell execution
-        result=$(printf "%s" "$result" | tr -d '\n' | sed 's/[[:space:]]*$//')
+        # Clean up the response - newlines are stripped only for single-line
+        # commands; answer mode keeps them so code keeps its formatting
+        if [[ "$mode" == "command" ]]; then
+            result=$(printf "%s" "$result" | tr -d '\n' | sed 's/[[:space:]]*$//')
+        else
+            result=$(printf "%s" "$result" | sed 's/[[:space:]]*$//')
+        fi
+
+        # Answer mode: append grounding sources when Google Search was used
+        if [[ "$mode" == "answer" ]] && [[ "$search_backend" == "gemini" ]]; then
+            local sources
+            sources=$(printf "%s" "$response" | jq -r '.candidates[0].groundingMetadata.groundingChunks[]?.web.uri // empty' 2>/dev/null)
+            if [[ -n "$sources" ]]; then
+                sources=$(printf '%s' "$sources" | sed 's/^/ - /')
+                result=$(printf '%s\n\nSources:\n%s' "$result" "$sources")
+            fi
+        fi
         printf "%s" "$result"
     else
         # Fallback parsing without jq - handle responses with newlines

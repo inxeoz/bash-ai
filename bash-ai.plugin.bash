@@ -18,6 +18,7 @@ source "${_BASH_AI_PLUGIN_DIR}/lib-bash/providers/qwen.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/providers/grok.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/providers/mistral.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/utils.bash"
+source "${_BASH_AI_PLUGIN_DIR}/lib-bash/search.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/widget.bash"
 
 # Initialize the plugin

@@ -18,13 +18,18 @@ _bash_ai_check_ollama() {
 # Function to call Ollama API
 _bash_ai_query_ollama() {
     local query="$1"
+    local mode="${2:-command}"
     local response
     
     # Build context
     local context=$(_bash_ai_build_context)
     local escaped_context=$(_bash_ai_escape_json "$context")
-    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context")
+    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context" "$mode")
     local escaped_system_prompt=$(_bash_ai_escape_json "$system_prompt")
+    
+    # Answer mode gets a bigger token budget for code examples
+    local num_predict_param=""
+    [[ "$mode" == "answer" ]] && num_predict_param=$',\n    "num_predict": '"${BASH_AI_ANSWER_MAX_TOKENS:-4096}"
     
     # Prepare the JSON payload
     local escaped_query=$(_bash_ai_escape_json "$query")
@@ -37,7 +42,7 @@ _bash_ai_query_ollama() {
     "think": false,
     "options": {
         "temperature": 0.3
-    }
+    }${num_predict_param}
 }
 EOF
 )
@@ -66,9 +71,14 @@ EOF
             fi
             return 1
         fi
-        # Clean up the response - remove markdown code fences, newlines, and trailing whitespace
-        # Commands should be single-line for shell execution
-        result=$(printf "%s" "$result" | sed 's/^```[a-z]*$//' | tr -d '\n' | sed 's/[[:space:]]*$//')
+        # Clean up the response - markdown fences and newlines are stripped
+        # only for single-line commands; answer mode keeps them so code
+        # keeps its formatting
+        if [[ "$mode" == "command" ]]; then
+            result=$(printf "%s" "$result" | sed 's/^```[a-z]*$//' | tr -d '\n' | sed 's/[[:space:]]*$//')
+        else
+            result=$(printf "%s" "$result" | sed 's/[[:space:]]*$//')
+        fi
         printf "%s" "$result"
     else
         # Fallback parsing without jq - handle responses with newlines
@@ -87,8 +97,10 @@ EOF
             return 1
         fi
 
-        # Remove markdown code fences
-        result=$(printf "%s" "$result" | sed 's/^```[a-z]*$//')
+        # Remove markdown code fences in command mode only
+        if [[ "$mode" == "command" ]]; then
+            result=$(printf "%s" "$result" | sed 's/^```[a-z]*$//')
+        fi
 
         # Unescape JSON string (handle \n, \t, etc.) and clean up
         result=$(printf "%s" "$result" | sed 's/\\n/\n/g; s/\\t/\t/g; s/\\r/\r/g; s/\\"/"/g; s/\\\\/\\/g')

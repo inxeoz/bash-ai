@@ -9,6 +9,7 @@ source "$PLUGIN_DIR/lib-bash/context.bash"
 source "$PLUGIN_DIR/lib-bash/providers/anthropic.bash"
 source "$PLUGIN_DIR/lib-bash/providers/ollama.bash"
 source "$PLUGIN_DIR/lib-bash/utils.bash"
+source "$PLUGIN_DIR/lib-bash/search.bash"
 
 # Test functions
 
@@ -398,6 +399,156 @@ test_get_system_prompt_with_empty_extension() {
     teardown_test_env
 }
 
+# Answer mode tests
+
+test_answer_system_prompt_requests_formatted_code() {
+    setup_test_env
+
+    local prompt
+    prompt=$(_bash_ai_get_system_prompt "test context" "answer")
+
+    assert_contains "$prompt" "helpful terminal assistant"
+    assert_contains "$prompt" "fenced code blocks"
+    assert_contains "$prompt" "Preserve indentation and spacing"
+    assert_contains "$prompt" "web search results"
+    assert_contains "$prompt" "Context:"
+    assert_not_contains "$prompt" "bash command generator"
+
+    teardown_test_env
+}
+
+test_answer_mode_passes_mode_to_provider() {
+    setup_test_env
+    export BASH_AI_PROVIDER="openai"
+    export OPENAI_API_KEY="test-key"
+    export BASH_AI_SEARCH_BACKEND="off"
+
+    # Restore the real functions (earlier tests may have overridden them)
+    source "$PLUGIN_DIR/lib-bash/utils.bash"
+    source "$PLUGIN_DIR/lib-bash/search.bash"
+
+    _bash_ai_query_openai() {
+        echo "openai:$1:$2"
+    }
+
+    local output
+    output=$(_bash_ai_query "explain pipes" "answer")
+    assert_equals "$output" "openai:explain pipes:answer"
+
+    teardown_test_env
+}
+
+test_answer_mode_appends_search_results_to_query() {
+    setup_test_env
+    export BASH_AI_PROVIDER="openai"
+    export OPENAI_API_KEY="test-key"
+    export BASH_AI_SEARCH_BACKEND="ddg"
+
+    # Restore the real functions (earlier tests may have overridden them)
+    source "$PLUGIN_DIR/lib-bash/utils.bash"
+    source "$PLUGIN_DIR/lib-bash/search.bash"
+
+    curl() {
+        if [[ "$*" == *"html.duckduckgo.com"* ]]; then
+            printf '%s' '<div class="result"><h2 class="result__title"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fx">Found Result</a></h2><a class="result__snippet" href="x">Relevant snippet.</a></div>'
+        fi
+    }
+
+    _bash_ai_query_openai() {
+        printf '%s' "$1"
+    }
+
+    local output
+    output=$(_bash_ai_query "show me an example" "answer")
+    assert_contains "$output" "show me an example"
+    assert_contains "$output" "Web search results"
+    assert_contains "$output" "Found Result"
+
+    teardown_test_env
+}
+
+test_command_mode_does_not_search() {
+    setup_test_env
+    export BASH_AI_PROVIDER="openai"
+    export OPENAI_API_KEY="test-key"
+    export BASH_AI_SEARCH_BACKEND="ddg"
+
+    # Restore the real functions (earlier tests may have overridden them)
+    source "$PLUGIN_DIR/lib-bash/utils.bash"
+    source "$PLUGIN_DIR/lib-bash/search.bash"
+
+    local curl_called=0
+    curl() {
+        curl_called=1
+    }
+
+    _bash_ai_query_openai() {
+        echo "mock-openai-result"
+    }
+
+    local output
+    output=$(_bash_ai_query "list files")
+    assert_equals "$output" "mock-openai-result"
+    assert_equals "$curl_called" "0"
+
+    teardown_test_env
+}
+
+test_bash_ai_answer_prints_multiline_response() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+
+    _bash_ai_query() {
+        printf 'Here is an example:\n\n```python\nx = 1\nprint(x)\n```'
+    }
+
+    local output
+    output=$(bash-ai-answer "python example")
+    local result=$?
+
+    assert_equals "$result" "0"
+    assert_contains "$output" "Here is an example:"
+    assert_contains "$output" "print(x)"
+    assert_not_contains "$output" "Failed to get an answer"
+
+    teardown_test_env
+}
+
+test_bash_ai_answer_shows_usage_without_arguments() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+
+    local output
+    output=$(bash-ai-answer)
+    local result=$?
+
+    assert_equals "$result" "1"
+    assert_contains "$output" "Usage: bash-ai-answer"
+
+    teardown_test_env
+}
+
+test_bash_ai_answer_handles_api_errors() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+
+    _bash_ai_query() {
+        printf "Error: API connection failed"
+    }
+
+    local output
+    output=$(bash-ai-answer "test question" 2>&1)
+    local result=$?
+
+    assert_equals "$result" "1"
+    assert_contains "$output" "Failed to get an answer"
+    assert_contains "$output" "API connection failed"
+
+    teardown_test_env
+}
+
 # Run tests
 echo "Running utils tests..."
 run_test "Routes to Anthropic provider when configured" test_routes_to_anthropic_provider
@@ -419,4 +570,11 @@ run_test "System prompt includes custom extension when set" test_get_system_prom
 run_test "System prompt works without extension" test_get_system_prompt_without_extension
 run_test "System prompt handles multiline extension" test_get_system_prompt_with_multiline_extension
 run_test "System prompt handles empty extension" test_get_system_prompt_with_empty_extension
+run_test "Answer system prompt requests formatted code" test_answer_system_prompt_requests_formatted_code
+run_test "Answer mode passes mode to provider" test_answer_mode_passes_mode_to_provider
+run_test "Answer mode appends search results to query" test_answer_mode_appends_search_results_to_query
+run_test "Command mode does not search the web" test_command_mode_does_not_search
+run_test "bash-ai-answer prints multiline response" test_bash_ai_answer_prints_multiline_response
+run_test "bash-ai-answer shows usage without arguments" test_bash_ai_answer_shows_usage_without_arguments
+run_test "bash-ai-answer handles API errors" test_bash_ai_answer_handles_api_errors
 finish_tests

@@ -25,6 +25,22 @@
 # desyncs readline's display. Use Ctrl-G or the ,, alias instead.)
 : ${BASH_AI_PENDING_FILE:="/tmp/bash-ai-pending"}  # Scratch file used by `bash-ai "..."` to hand the command to the Ctrl-G hook
 
+# Answer mode configuration (Ctrl-F)
+# Ctrl-G generates a single-line command; Ctrl-F answers questions with
+# multi-line, properly formatted code examples, optionally backed by web search.
+# Note: Ctrl-F is readline's forward-char by default - set BASH_AI_ANSWER_KEY
+# to another key (e.g. "\C-t") if you want to keep it.
+: ${BASH_AI_ANSWER_KEY:="\C-f"}  # Readline binding for the answer widget
+: ${BASH_AI_ANSWER_MAX_TOKENS:=4096}  # Token budget for answer-mode responses (command mode stays at 256)
+
+# Web search configuration (answer mode only)
+# Backend: "auto" = Gemini grounding when BASH_AI_PROVIDER=gemini, else DuckDuckGo;
+# "gemini" = Google Search grounding (Gemini provider only);
+# "ddg" = DuckDuckGo HTML endpoint (any provider, no API key);
+# "off" = no live search, answer from model knowledge only.
+: ${BASH_AI_SEARCH_BACKEND:="auto"}
+: ${BASH_AI_SEARCH_MAX_RESULTS:=5}  # Max web results fed to the model (DuckDuckGo backend)
+
 # Provider validation
 _bash_ai_validate_config() {
     if [[ "$BASH_AI_PROVIDER" != "anthropic" ]] && [[ "$BASH_AI_PROVIDER" != "ollama" ]] && [[ "$BASH_AI_PROVIDER" != "gemini" ]] && [[ "$BASH_AI_PROVIDER" != "qwen" ]] && [[ "$BASH_AI_PROVIDER" != "openai" ]] && [[ "$BASH_AI_PROVIDER" != "grok" ]] && [[ "$BASH_AI_PROVIDER" != "mistral" ]] && [[ "$BASH_AI_PROVIDER" != "custom" ]]; then

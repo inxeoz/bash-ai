@@ -12,16 +12,21 @@ _bash_ai_openai_supports_temperature() {
 # Function to call OpenAI API
 _bash_ai_query_openai() {
     local query="$1"
+    local mode="${2:-command}"
     local response
 
     # Build context
     local context=$(_bash_ai_build_context)
     local escaped_context=$(_bash_ai_escape_json "$context")
-    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context")
+    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context" "$mode")
     local escaped_system_prompt=$(_bash_ai_escape_json "$system_prompt")
 
     # Prepare the JSON payload - escape quotes in the query
     local escaped_query=$(_bash_ai_escape_json "$query")
+
+    # Answer mode gets a bigger token budget for code examples
+    local max_tokens=256
+    [[ "$mode" == "answer" ]] && max_tokens="${BASH_AI_ANSWER_MAX_TOKENS:-4096}"
 
     # Determine token parameter based on model (newer models use max_completion_tokens)
     local token_param="max_completion_tokens"
@@ -59,7 +64,7 @@ _bash_ai_query_openai() {
             "content": "$escaped_query"
         }
     ],
-    "$token_param": 256${temperature_param}${thinking_param}${reasoning_effort_param}
+    "$token_param": $max_tokens${temperature_param}${thinking_param}${reasoning_effort_param}
 }
 EOF
 )
@@ -97,9 +102,13 @@ EOF
             fi
             return 1
         fi
-        # Clean up the response - remove newlines and trailing whitespace
-        # Commands should be single-line for shell execution
-        result=$(printf "%s" "$result" | tr -d '\n' | sed 's/[[:space:]]*$//')
+        # Clean up the response - newlines are stripped only for single-line
+        # commands; answer mode keeps them so code keeps its formatting
+        if [[ "$mode" == "command" ]]; then
+            result=$(printf "%s" "$result" | tr -d '\n' | sed 's/[[:space:]]*$//')
+        else
+            result=$(printf "%s" "$result" | sed 's/[[:space:]]*$//')
+        fi
         printf "%s" "$result"
     else
         # Fallback parsing without jq - handle responses with newlines

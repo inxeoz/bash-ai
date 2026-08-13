@@ -8,6 +8,12 @@
 # line into a query: type a request, press Ctrl-G, and the generated
 # command replaces the line, ready to edit or run.
 #
+# Ctrl-F ("find") turns the line into an answer query: the full multi-line
+# answer (web search + formatted code examples) is printed to the terminal
+# and the prompt redraws below it. The command line itself is untouched.
+# Note: Ctrl-F is readline's forward-char by default - if you want that
+# binding back, set BASH_AI_ANSWER_KEY to another key (e.g. "\C-t").
+#
 # `bash-ai "..."` stages its command in a pending file; pressing Ctrl-G
 # on an empty line inserts it (bash has no print -z).
 
@@ -24,6 +30,7 @@ _bash_ai_trigger() {
 
     if [[ -z "$line" ]]; then
         printf '\n\033[33mType a request and press Ctrl-G, or use: ,, query\033[0m\n'
+        printf '\033[33mType a question and press Ctrl-F to search the web\033[0m\n'
         return 0
     fi
 
@@ -51,16 +58,50 @@ _bash_ai_trigger() {
     return 0
 }
 
-# Bind the trigger key. Only meaningful in interactive shells with readline.
+# Ctrl-F ("find"): answer mode with web search. The multi-line answer is
+# printed to the terminal; READLINE_LINE stays untouched so readline
+# redraws the prompt below the answer.
+_bash_ai_answer() {
+    local line="${READLINE_LINE:-}"
+
+    if [[ -z "$line" ]]; then
+        printf '\n\033[33mType a question and press Ctrl-F to search the web\033[0m\n'
+        return 0
+    fi
+
+    # Echo the query line, then run the answer query synchronously
+    printf '\n%s\n' "$line"
+    printf '⠋ Searching…'
+    local answer
+    answer="$(_bash_ai_query "$line" "answer" 2>/dev/null)"
+    local exit_code=$?
+    printf '\r\033[K'
+
+    if (( exit_code == 0 )) && [[ -n "$answer" ]] && [[ "$answer" != "Error:"* ]] && [[ "$answer" != "API Error:"* ]]; then
+        printf '\n%s\n\n' "$answer"
+    else
+        # Show error - keep it visible
+        printf '\n\033[31m❌ Failed to get an answer\033[0m\n'
+        if [[ -n "$answer" ]]; then
+            printf '\033[31m%s\033[0m\n' "$answer"
+        fi
+        printf '\n'
+    fi
+    return 0
+}
+
+# Bind the trigger keys. Only meaningful in interactive shells with readline.
 _bash_ai_init_widget() {
     if [[ $- != *i* ]]; then
         return 0
     fi
 
     bind -x '"\C-g": _bash_ai_trigger'
+    bind -x "\"${BASH_AI_ANSWER_KEY:-\C-h}\": _bash_ai_answer"
 
     # Also bind the vi-mode insert keymap for users with `set -o vi`
     if set -o | grep -qE '^vi[[:space:]]+on'; then
         bind -m vi-insert -x '"\C-g": _bash_ai_trigger'
+        bind -m vi-insert -x "\"${BASH_AI_ANSWER_KEY:-\C-h}\": _bash_ai_answer"
     fi
 }

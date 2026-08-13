@@ -209,6 +209,101 @@ test_includes_temperature_for_gpt4_models() {
     assert_contains "$captured_payload" '"temperature": 0.3'
 }
 
+# Answer mode tests
+
+capture_openai_payload_for_mode() {
+    local mode="$1"
+    export OPENAI_API_KEY="test-key"
+    export BASH_AI_OPENAI_MODEL="gpt-5.4-mini"
+    export BASH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
+    local payload_file=$(mktemp)
+
+    curl() {
+        if [[ "$*" == *"https://api.openai.com/v1/chat/completions"* ]]; then
+            local prev_arg=""
+            for arg in "$@"; do
+                if [[ "$prev_arg" == "--data" ]]; then
+                    echo "$arg" > "$payload_file"
+                    break
+                fi
+                prev_arg="$arg"
+            done
+            echo '{"choices":[{"message":{"content":"test"}}]}'
+            return 0
+        fi
+        command curl "$@"
+    }
+
+    _bash_ai_query_openai "test" "$mode" >/dev/null
+    local captured_payload=$(cat "$payload_file")
+    rm -f "$payload_file"
+    printf "%s" "$captured_payload"
+}
+
+test_command_mode_uses_small_token_budget() {
+    local captured_payload=$(capture_openai_payload_for_mode "command")
+    assert_contains "$captured_payload" '"max_completion_tokens": 256'
+}
+
+test_answer_mode_uses_large_token_budget() {
+    local captured_payload=$(capture_openai_payload_for_mode "answer")
+    assert_contains "$captured_payload" '"max_completion_tokens": 4096'
+}
+
+test_answer_mode_uses_configured_token_budget() {
+    export BASH_AI_ANSWER_MAX_TOKENS="8192"
+    local captured_payload=$(capture_openai_payload_for_mode "answer")
+    assert_contains "$captured_payload" '"max_completion_tokens": 8192'
+    unset BASH_AI_ANSWER_MAX_TOKENS
+}
+
+test_answer_mode_preserves_newlines() {
+    export OPENAI_API_KEY="test-key"
+    export BASH_AI_OPENAI_MODEL="gpt-5.4-mini"
+    export BASH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
+
+    curl() {
+        if [[ "$*" == *"https://api.openai.com/v1/chat/completions"* ]]; then
+            printf '%s' '{"choices":[{"message":{"content":"Example:\n\n```python\nx = 1\nprint(x)\n```"}}]}'
+            return 0
+        fi
+        command curl "$@"
+    }
+
+    local result
+    result=$(_bash_ai_query_openai "show example" "answer")
+
+    assert_contains "$result" "Example:"
+    assert_contains "$result" "print(x)"
+    assert_contains "$result" '```python'
+
+    # Newlines survive: command mode would have flattened them
+    local line_count
+    line_count=$(printf '%s' "$result" | wc -l | tr -d ' ')
+    assert_greater_than "$line_count" "3"
+}
+
+test_command_mode_still_flattens_newlines() {
+    export OPENAI_API_KEY="test-key"
+    export BASH_AI_OPENAI_MODEL="gpt-5.4-mini"
+    export BASH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
+
+    # Force the jq path deterministically (it is the path that flattens)
+    mock_jq "true"
+
+    curl() {
+        if [[ "$*" == *"https://api.openai.com/v1/chat/completions"* ]]; then
+            printf '%s' '{"choices":[{"message":{"content":"line one\nline two"}}]}'
+            return 0
+        fi
+        command curl "$@"
+    }
+
+    local result
+    result=$(_bash_ai_query_openai "list files" "command")
+    assert_equals "$result" "line oneline two"
+}
+
 # Run tests
 echo "Running OpenAI provider tests..."
 run_test "OpenAI query success" test_openai_query_success
@@ -225,6 +320,11 @@ run_test "Uses max_completion_tokens for gpt-5 models" test_uses_max_completion_
 run_test "Uses max_completion_tokens for o1 models" test_uses_max_completion_tokens_for_o1_models
 run_test "Omits temperature for gpt-5 models" test_omits_temperature_for_gpt5_models
 run_test "Includes temperature for gpt-4 models" test_includes_temperature_for_gpt4_models
+run_test "Command mode uses small token budget" test_command_mode_uses_small_token_budget
+run_test "Answer mode uses large token budget" test_answer_mode_uses_large_token_budget
+run_test "Answer mode uses configured token budget" test_answer_mode_uses_configured_token_budget
+run_test "Answer mode preserves newlines" test_answer_mode_preserves_newlines
+run_test "Command mode still flattens newlines" test_command_mode_still_flattens_newlines
 
 # Tests for keyless OpenAI-compatible endpoints
 echo ""

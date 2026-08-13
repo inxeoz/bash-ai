@@ -5,13 +5,18 @@
 # Function to call Grok API
 _bash_ai_query_grok() {
     local query="$1"
+    local mode="${2:-command}"
     local response
 
     # Build context
     local context=$(_bash_ai_build_context)
     local escaped_context=$(_bash_ai_escape_json "$context")
-    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context")
+    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context" "$mode")
     local escaped_system_prompt=$(_bash_ai_escape_json "$system_prompt")
+
+    # Answer mode gets a bigger token budget for code examples
+    local max_tokens=256
+    [[ "$mode" == "answer" ]] && max_tokens="${BASH_AI_ANSWER_MAX_TOKENS:-4096}"
 
     # Prepare the JSON payload - escape quotes in the query
     local escaped_query=$(_bash_ai_escape_json "$query")
@@ -30,7 +35,7 @@ _bash_ai_query_grok() {
             "content": "$escaped_query"
         }
     ],
-    "max_completion_tokens": 256,
+    "max_completion_tokens": $max_tokens,
     "temperature": 0.3,
     "reasoning_effort": "none"
 }
@@ -62,9 +67,13 @@ EOF
             fi
             return 1
         fi
-        # Clean up the response - remove newlines and trailing whitespace
-        # Commands should be single-line for shell execution
-        result=$(printf "%s" "$result" | tr -d '\n' | sed 's/[[:space:]]*$//')
+        # Clean up the response - newlines are stripped only for single-line
+        # commands; answer mode keeps them so code keeps its formatting
+        if [[ "$mode" == "command" ]]; then
+            result=$(printf "%s" "$result" | tr -d '\n' | sed 's/[[:space:]]*$//')
+        else
+            result=$(printf "%s" "$result" | sed 's/[[:space:]]*$//')
+        fi
         printf "%s" "$result"
     else
         # Fallback parsing without jq - handle responses with newlines

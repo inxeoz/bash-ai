@@ -4,6 +4,37 @@
 > the big one: a native terminal with built-in AI, so we stop fighting
 > bash/readline entirely.
 
+## Status (2026-08)
+
+Built: `ai-term/` (Go + bubbletea), a PTY wrapper that keeps the shell's
+native line editor and adds a status bar + AI panel (`Ctrl-G` →
+query → bracketed-paste insert). Providers, context, and prompt are
+ported from `lib-bash/` into `ai/` (net/http + JSON, no jq). A tmux
+front end (`cmd/ai-popup`) opens the same UI in a `display-popup` and
+inserts via `tmux send-keys -l`.
+
+Two deliberate design decisions, recorded because they change the
+original vision:
+
+1. **Native-line + chrome, not a fully-owned input line.** The original
+   vision said "own the input line" (Warp-style, ECHO off + own
+   editor). That forfeits readline editing/history/completion and means
+   reimplementing a line editor — months. MVP instead wraps the native
+   line: shell keeps ECHO, we add chrome (status bar, AI panel) and
+   insert via bracketed paste / `send-keys -l`. If a fully-owned line
+   is ever wanted, it is a separate project.
+2. **tmux integration via popup, not a fork.** Forking tmux would not
+   solve the input-line problem anyway (tmux leaves the line editor to
+   the shell inside each pane) and means maintaining a C fork. The
+   `display-popup` route keeps tmux's terminal emulator and reuses the
+   Go `ai/` package.
+
+Known limitation: shell output colors are stripped in the wrapper's
+screen model (rows stay plain so cursor math is exact — SGR bytes
+previously consumed cells and corrupted the cursor, producing literal
+`[0m`/`[4m` text). The model does handle readline's CSI ICH/DCH/ECH
+(`\x1b[<n>@` etc.) for faithful mid-line edits.
+
 ## The Core Problem
 
 The bash port is a series of compromises:
@@ -94,6 +125,8 @@ Because the app owns rendering, every fight disappears:
 
 Smaller, shippable improvements while the wrapper is being built:
 
+- [x] **PTY integration tests** (wrapper track): `go test ./...` covers
+      providers (httptest), context, screen model, and panel logic.
 - [ ] **Streaming**: `curl -N` + progressively display the command as it
       streams instead of one blocking wait.
 - [ ] **Candidate picker**: request 2–3 commands in one call, render a
@@ -109,9 +142,9 @@ Smaller, shippable improvements while the wrapper is being built:
       config file.
 - [ ] **Provider ergonomics**: per-query `--model` override, `bash-ai
       --list-models`, cheap retry on rate-limit errors.
-- [ ] **PTY integration tests**: script the PTY (as we do manually during
-      development) to lock in display behavior — no more eyeballing
-      escape sequences.
+- [x] **Wrapper MVP** (supersedes the quick-win PTY work): shell in a
+      PTY + status bar + AI panel (async query, spinner, cancellation,
+      bracketed-paste insert, busy/idle detection). See `ai-term/`.
 
 ## How to Start the Terminal Project
 

@@ -160,3 +160,48 @@ source ~/path/to/bash-ai.plugin.bash
 `bash-ai "query"` prints the generated command and stages it; pressing
 Ctrl-G on an empty line inserts it into the prompt (bash has no
 `print -z`). A `,, query` alias is a handy shorthand.
+
+## ai-term (PTY wrapper)
+
+`ai-term/` is a Go program that wraps your real shell in a PTY and
+renders it inside a TUI: the shell keeps its native readline line
+(editing, history, completion all untouched), and ai-term adds a status
+bar (provider/model, idle/busy) plus an AI panel.
+
+```bash
+cd ai-term && go build -o ai-term .
+./ai-term                      # replaces your shell; exit with `exit`
+```
+
+- `Ctrl-G` opens the AI panel: type a request, Enter to generate
+  (animated spinner, Esc/Ctrl-C to cancel), Enter again to insert the
+  command into the shell line via bracketed paste — fully editable.
+- Insert is refused while the shell is busy (idle detection via OSC
+  133 prompt markers, injected for bash).
+- Same `BASH_AI_*` env vars as the plugins; providers ported to
+  `net/http` + JSON (no `jq` needed).
+- Known limitation: shell output colors are stripped (the mini screen
+  model keeps rows plain so cursor math stays exact); vim/htop-style
+  full-screen apps degrade.
+
+### tmux-ai (popup front end)
+
+Prefer tmux? Use `ai-popup` instead of running ai-term as your shell —
+tmux keeps its full terminal emulator (vim/htop fine) and the popup
+panel reuses the same provider code:
+
+```bash
+cd ai-term && go build -o ai-popup ./cmd/ai-popup
+```
+
+Add to `~/.tmux.conf` (see `ai-term/tmux-ai.tmux`):
+
+```tmux
+bind-key -T prefix g display-popup -w 70% -h 30% -E \
+  "/path/to/ai-popup -t '#{pane_id}'"
+```
+
+`prefix + g` opens the popup; the generated command is typed into the
+pane that was current before the popup (`tmux send-keys -l`), so it
+lands in the shell's own line. Outside tmux, ai-popup prints the
+command instead. Same `BASH_AI_*` config, same providers.

@@ -1,11 +1,13 @@
 // Package term is a minimal ANSI screen model used to display the
 // wrapped shell's output. It is deliberately NOT a terminal emulator:
 // it understands the escape sequences bash/zsh prompts and common
-// commands emit (cursor moves, line/screen clears, SGR colors) and
-// ignores the rest. Full-screen apps (vim, htop) will degrade.
+// commands emit (cursor moves, line/screen clears) and ignores the
+// rest. Full-screen apps (vim, htop) will degrade.
 //
-// Content is kept as raw rows of text; SGR color sequences pass through
-// untouched so colors survive our re-rendering.
+// Rows are kept as plain text: SGR color sequences are stripped on
+// ingestion so that cursor math is exact (sequence bytes consume zero
+// cells). The cost is that shell output loses its colors; the ai-term
+// chrome (status bar, panel) is styled by lipgloss independently.
 package term
 
 import (
@@ -24,7 +26,7 @@ const (
 type Screen struct {
 	rows    []string
 	cursorR int
-	cursorC int
+	cursorC int // column in runes
 	width   int
 	height  int
 	cap     int // maximum rows kept (scrollback)
@@ -84,7 +86,7 @@ func (s *Screen) Write(b []byte) {
 			case c == '\n':
 				s.cursorR++
 				s.ensureRow()
-			case c == '\b':
+			case c == '\b' || c == 0x7f:
 				if s.cursorC > 0 {
 					s.cursorC--
 				}
@@ -93,9 +95,7 @@ func (s *Screen) Write(b []byte) {
 				s.truncateRow()
 			case c >= 0x20:
 				r, size := utf8.DecodeRune(b[i:])
-				if r == utf8.RuneError && size == 1 {
-					s.writeByte(c)
-				} else {
+				if r != utf8.RuneError || size > 1 {
 					s.writeRune(r)
 					i += size - 1
 				}
@@ -151,6 +151,12 @@ func (s *Screen) ensureRow() {
 	for len(s.rows) <= s.cursorR {
 		s.rows = append(s.rows, "")
 	}
+	s.trimToHeight()
+}
+
+// trimToHeight drops overflow rows from the top (scrolling) and caps
+// the buffer at the scrollback limit.
+func (s *Screen) trimToHeight() {
 	if s.cursorR >= s.height {
 		drop := s.cursorR - s.height + 1
 		if drop > len(s.rows) {
@@ -169,6 +175,8 @@ func (s *Screen) ensureRow() {
 	}
 }
 
+// writeRune inserts r at the cursor. Overwrites existing content; pads
+// with spaces if the cursor is beyond the row end.
 func (s *Screen) writeRune(r rune) {
 	s.ensureRow()
 	row := []rune(s.rows[s.cursorR])
@@ -185,35 +193,22 @@ func (s *Screen) writeRune(r rune) {
 	s.truncateRow()
 }
 
-func (s *Screen) writeByte(c byte) {
-	if c < 0x20 {
+// truncateRow cuts the current row to the screen width (rune-aware so
+// multi-byte characters are never split).
+func (s *Screen) truncateRow() {
+	if s.cursorR >= len(s.rows) {
 		return
 	}
-	s.ensureRow()
-	row := []byte(s.rows[s.cursorR])
-	if s.cursorC < len(row) {
-		row[s.cursorC] = c
-	} else {
-		for len(row) < s.cursorC {
-			row = append(row, ' ')
-		}
-		row = append(row, c)
-	}
-	s.rows[s.cursorR] = string(row)
-	s.cursorC++
-	s.truncateRow()
-}
-
-func (s *Screen) truncateRow() {
-	if s.cursorR < len(s.rows) && len(s.rows[s.cursorR]) > s.width {
-		s.rows[s.cursorR] = s.rows[s.cursorR][:s.width]
+	row := []rune(s.rows[s.cursorR])
+	if len(row) > s.width {
+		s.rows[s.cursorR] = string(row[:s.width])
 		s.cursorC = s.width
 	}
 }
 
-// applyCSI handles CSI final bytes. The raw sequence bytes are passed
-// in so SGR color sequences can be embedded in the row content and
-// reach the real terminal display.
+// applyCSI handles CSI final bytes. Cursor moves and erases are
+// applied; everything else (SGR colors, mode sets) is dropped so rows
+// stay plain text.
 func (s *Screen) applyCSI(csi []byte) {
 	final := csi[len(csi)-1]
 	params := string(csi[:len(csi)-1])
@@ -230,10 +225,63 @@ func (s *Screen) applyCSI(csi []byte) {
 	}
 
 	switch final {
-	case 'm':
-		// SGR: colors pass through by embedding the raw sequence.
+	case 'm', 'h', 'l':
+		// SGR color / mode-set: dropped to keep rows plain.
+	case '@':
+		// ICH: insert n spaces at the cursor, shifting the rest right.
 		s.ensureRow()
-		s.rows[s.cursorR] += "\x1b[" + params + "m"
+		row := []rune(s.rows[s.cursorR])
+		n := count(1)
+		if s.cursorC <= len(row) {
+			pad := make([]rune, n)
+			for i := range pad {
+				pad[i] = ' '
+			}
+			s.rows[s.cursorR] = string(row[:s.cursorC]) + string(pad) + string(row[s.cursorC:])
+		}
+		s.truncateRow()
+	case 'P':
+		// DCH: delete n chars at the cursor, shifting the rest left.
+		s.ensureRow()
+		row := []rune(s.rows[s.cursorR])
+		n := count(1)
+		end := s.cursorC + n
+		if end > len(row) {
+			end = len(row)
+		}
+		s.rows[s.cursorR] = string(row[:s.cursorC]) + string(row[end:])
+	case 'X':
+		// ECH: erase n chars at the cursor (fill with spaces).
+		s.ensureRow()
+		row := []rune(s.rows[s.cursorR])
+		n := count(1)
+		for i := 0; i < n && s.cursorC+i < len(row); i++ {
+			row[s.cursorC+i] = ' '
+		}
+		s.rows[s.cursorR] = string(row)
+	case 'L':
+		// IL: insert n blank rows at the cursor, shifting down.
+		n := count(1)
+		blank := make([]string, n)
+		for i := range blank {
+			blank[i] = ""
+		}
+		if s.cursorR < len(s.rows) {
+			rows := append([]string{}, s.rows[:s.cursorR]...)
+			rows = append(rows, blank...)
+			s.rows = append(rows, s.rows[s.cursorR:]...)
+			s.cursorR += n
+		}
+		s.trimToHeight()
+	case 'M':
+		// DL: delete n rows at the cursor, shifting up.
+		n := count(1)
+		end := s.cursorR + n
+		if end > len(s.rows) {
+			end = len(s.rows)
+		}
+		s.rows = append(s.rows[:s.cursorR], s.rows[end:]...)
+		s.trimToHeight()
 	case 'K':
 		if s.cursorR >= len(s.rows) {
 			s.ensureRow()

@@ -214,16 +214,118 @@ test_handles_response_with_escaped_newline_without_jq() {
     mock_jq "false"
     
     # Mock response with escaped newline
-    local mock_response='{"candidates":[{"content":{"parts":[{"text":"docker ps\n"}]}}]}'
+    local mock_response='{"candidates":[{"content":{"parts":[{"text":"ls -la\n"}]}}]}'
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_bash_ai_query_gemini "list docker containers")
+    output=$(_bash_ai_query_gemini "list files")
     local result=$?
     
     assert_equals "$result" "0"
-    assert_equals "$output" "docker ps"
+    assert_equals "$output" "ls -la"
     
+    teardown_test_env
+}
+
+# Answer mode tests
+
+# Captures the JSON payload sent to the Gemini API
+capture_gemini_payload() {
+    local mode="$1"
+    local search_backend="${2:-gemini}"
+    export GEMINI_API_KEY="test-api-key"
+    export BASH_AI_SEARCH_BACKEND="$search_backend"
+    local payload_file=$(mktemp)
+
+    curl() {
+        local prev_arg=""
+        for arg in "$@"; do
+            if [[ "$prev_arg" == "--data" ]]; then
+                echo "$arg" > "$payload_file"
+                break
+            fi
+            prev_arg="$arg"
+        done
+        printf '%s' '{"candidates":[{"content":{"parts":[{"text":"answer text"}]}}]}'
+        return 0
+    }
+
+    mock_jq "true"
+    _bash_ai_query_gemini "test question" "$mode" "$search_backend" >/dev/null
+    local captured_payload=$(cat "$payload_file")
+    rm -f "$payload_file"
+    unset BASH_AI_SEARCH_BACKEND
+    printf "%s" "$captured_payload"
+}
+
+test_answer_mode_uses_large_token_budget() {
+    setup_test_env
+    export GEMINI_API_KEY="test-api-key"
+    local captured_payload=$(capture_gemini_payload "answer")
+    assert_contains "$captured_payload" '"maxOutputTokens": 4096'
+    teardown_test_env
+}
+
+test_command_mode_uses_small_token_budget() {
+    setup_test_env
+    export GEMINI_API_KEY="test-api-key"
+    local captured_payload=$(capture_gemini_payload "command")
+    assert_contains "$captured_payload" '"maxOutputTokens": 256'
+    teardown_test_env
+}
+
+test_answer_mode_includes_google_search_grounding() {
+    setup_test_env
+    export GEMINI_API_KEY="test-api-key"
+    local captured_payload=$(capture_gemini_payload "answer" "gemini")
+    assert_contains "$captured_payload" '"googleSearch": {}'
+    teardown_test_env
+}
+
+test_answer_mode_omits_grounding_when_backend_is_off() {
+    setup_test_env
+    export GEMINI_API_KEY="test-api-key"
+    local captured_payload=$(capture_gemini_payload "answer" "off")
+    assert_not_contains "$captured_payload" "googleSearch"
+    teardown_test_env
+}
+
+test_answer_mode_appends_sources() {
+    setup_test_env
+    export GEMINI_API_KEY="test-api-key"
+    mock_jq "true"
+
+    local mock_response='{"candidates":[{"content":{"parts":[{"text":"Grounded answer\n\n```python\nprint(1)\n```"}]},"groundingMetadata":{"groundingChunks":[{"web":{"uri":"https://example.com/a"}},{"web":{"uri":"https://example.com/b"}}]}}]}'
+    mock_curl_response "$mock_response" 0
+
+    local output
+    output=$(_bash_ai_query_gemini "test question" "answer" "gemini")
+    local result=$?
+
+    assert_equals "$result" "0"
+    assert_contains "$output" "Grounded answer"
+    assert_contains "$output" "print(1)"
+    assert_contains "$output" "Sources:"
+    assert_contains "$output" " - https://example.com/a"
+    assert_contains "$output" " - https://example.com/b"
+
+    teardown_test_env
+}
+
+test_answer_mode_without_grounding_has_no_sources() {
+    setup_test_env
+    export GEMINI_API_KEY="test-api-key"
+    mock_jq "true"
+
+    local mock_response='{"candidates":[{"content":{"parts":[{"text":"plain answer"}]}}]}'
+    mock_curl_response "$mock_response" 0
+
+    local output
+    output=$(_bash_ai_query_gemini "test question" "answer" "off")
+
+    assert_contains "$output" "plain answer"
+    assert_not_contains "$output" "Sources:"
+
     teardown_test_env
 }
 
@@ -241,4 +343,10 @@ run_test "Handles curl connection failure" test_handles_curl_connection_failure
 run_test "Handles empty response" test_handles_empty_response
 run_test "Handles response with escaped newline (with jq)" test_handles_response_with_escaped_newline_with_jq
 run_test "Handles response with escaped newline (without jq)" test_handles_response_with_escaped_newline_without_jq
+run_test "Answer mode uses large token budget" test_answer_mode_uses_large_token_budget
+run_test "Command mode uses small token budget" test_command_mode_uses_small_token_budget
+run_test "Answer mode includes Google Search grounding" test_answer_mode_includes_google_search_grounding
+run_test "Answer mode omits grounding when backend is off" test_answer_mode_omits_grounding_when_backend_is_off
+run_test "Answer mode appends grounding sources" test_answer_mode_appends_sources
+run_test "Answer mode without grounding has no sources" test_answer_mode_without_grounding_has_no_sources
 finish_tests

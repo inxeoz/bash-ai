@@ -112,6 +112,16 @@ func (s *Session) Write(b []byte) (int, error) {
 	return s.Master.Write(b)
 }
 
+// Output returns the channel of shell output chunks (closed on exit).
+func (s *Session) Output() <-chan []byte { return s.Out }
+
+// TracksIdle reports whether idle/busy tracking is active for this
+// shell (bash with injected prompt markers).
+func (s *Session) TracksIdle() bool { return s.Track }
+
+// ShellName returns the shell binary basename (e.g. "bash").
+func (s *Session) ShellName() string { return s.Name }
+
 // Resize resizes the PTY window.
 func (s *Session) Resize(cols, rows uint16) error {
 	return pty.Setsize(s.Master, &pty.Winsize{Cols: cols, Rows: rows})
