@@ -251,6 +251,11 @@ test_answer_prints_multiline_response() {
     assert_contains "$output" "print(x)"
     assert_not_contains "$output" "Failed to get an answer"
 
+    # The answer is framed by separators (query | answer | next prompt)
+    local sep
+    sep="-------------------------------"
+    assert_equals "$(printf '%s\n' "$output" | grep -cx -- "$sep")" "2"
+
     # The command line is untouched
     assert_equals "$READLINE_LINE" "show me a python example"
 
