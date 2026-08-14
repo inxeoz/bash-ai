@@ -89,6 +89,10 @@ _bash_ai_answer() {
         printf '\n'
         _bash_ai_print_separator
         printf '\n'
+
+        # The question was answered on screen; don't leave it in the prompt
+        READLINE_LINE=""
+        READLINE_POINT=0
     else
         # Show error - keep it visible
         printf '\n\033[31m❌ Failed to get an answer\033[0m\n'

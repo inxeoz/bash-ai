@@ -256,8 +256,8 @@ test_answer_prints_multiline_response() {
     sep="-------------------------------"
     assert_equals "$(printf '%s\n' "$output" | grep -cx -- "$sep")" "2"
 
-    # The command line is untouched
-    assert_equals "$READLINE_LINE" "show me a python example"
+    # The question was answered on screen and is NOT left in the prompt
+    assert_equals "$READLINE_LINE" ""
 
     rm -f "$outfile"
     teardown_test_env

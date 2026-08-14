@@ -602,6 +602,44 @@ test_conversation_turn_cap() {
     teardown_test_env
 }
 
+test_conversation_last_question() {
+    setup_test_env
+    source "$PLUGIN_DIR/lib-bash/utils.bash"
+
+    _bash_ai_conv_append "first question" "a1"
+    _bash_ai_conv_append "second question" "a2"
+    assert_equals "$(_bash_ai_conv_last_question)" "second question"
+
+    teardown_test_env
+}
+
+test_conversation_gives_search_thread_context() {
+    setup_test_env
+    export BASH_AI_PROVIDER="openai"
+    export OPENAI_API_KEY="test-key"
+    export BASH_AI_SEARCH_BACKEND="ddg"
+    source "$PLUGIN_DIR/lib-bash/utils.bash"
+
+    _bash_ai_conv_append "cap of india" "The capital of India is New Delhi."
+
+    # Capture the search query instead of hitting the network
+    _bash_ai_web_search() {
+        printf 'SEARCHED:[%s]' "$1"
+    }
+
+    _bash_ai_query_openai() {
+        printf '%s' "$1"
+    }
+
+    local output
+    output=$(_bash_ai_query "what was the old cap" "answer")
+    assert_contains "$output" "SEARCHED:[cap of india what was the old cap]"
+    assert_contains "$output" "Previous conversation:"
+    assert_contains "$output" "what was the old cap"
+
+    teardown_test_env
+}
+
 test_conversation_reset_clears_memory() {
     setup_test_env
     source "$PLUGIN_DIR/lib-bash/utils.bash"
@@ -812,6 +850,8 @@ run_test "Answer mode appends search results to query" test_answer_mode_appends_
 run_test "Command mode does not search the web" test_command_mode_does_not_search
 run_test "Conversation context feeds follow-up questions" test_conversation_context_feeds_followup
 run_test "Conversation keeps only the newest turns" test_conversation_turn_cap
+run_test "Conversation last question is tracked" test_conversation_last_question
+run_test "Conversation gives follow-up search thread context" test_conversation_gives_search_thread_context
 run_test "Conversation reset clears memory" test_conversation_reset_clears_memory
 run_test "bash-ai-answer stores the turn in the conversation" test_bash_ai_answer_stores_conversation_turn
 run_test "bash-ai-answer prints multiline response" test_bash_ai_answer_prints_multiline_response

@@ -11,7 +11,7 @@ _bash_ai_get_system_prompt() {
     local base_prompt=""
 
     if [[ "$mode" == "answer" ]]; then
-        base_prompt="You are a helpful terminal assistant. Answer the user's question with a clear explanation and, when relevant, properly formatted code examples.\n\nIMPORTANT RULES:\n1. Use fenced code blocks (like \`\`\`python ... \`\`\`) for code examples\n2. Preserve indentation and spacing exactly - proper formatting matters more than brevity\n3. Prefer working, idiomatic examples the user can paste and run\n4. If web search results are included in the user's message, use them as the primary source and cite their URLs\n5. Answer in plain text outside code blocks"
+        base_prompt="You are a helpful terminal assistant. Answer the user's question with a clear explanation and, when relevant, properly formatted code examples.\n\nIMPORTANT RULES:\n1. Use fenced code blocks (like \`\`\`python ... \`\`\`) for code examples\n2. Preserve indentation and spacing exactly - proper formatting matters more than brevity\n3. Prefer working, idiomatic examples the user can paste and run\n4. If web search results are included in the user's message, use them as the primary source and cite their URLs\n5. If a previous conversation is included in the user's message, it is context: interpret the current question as a follow-up to it\n6. Answer in plain text outside code blocks"
     else
         base_prompt="You are a bash command generator. Generate syntactically correct bash commands based on the user's natural language request.\n\nIMPORTANT RULES:\n1. Output ONLY the raw command - no explanations, no markdown, no backticks\n2. For arguments containing spaces or special characters, use single quotes\n3. Use double quotes only when variable expansion is needed\n4. Properly escape special characters within quotes\n\nExamples:\n- echo 'Hello World!' (spaces require quotes)\n- echo \"Current user: \$USER\" (variable expansion needs double quotes)\n- grep 'pattern with spaces' file.txt\n- find . -name '*.txt' (glob patterns in quotes)"
     fi
@@ -170,6 +170,15 @@ _bash_ai_conv_context() {
     ' < "$file"
 }
 
+# The last stored user question; used to give follow-up web searches
+# thread context ("" when the conversation is empty).
+_bash_ai_conv_last_question() {
+    local file
+    file="$(_bash_ai_conv_file)"
+    [[ -s "$file" ]] || return 0
+    tail -n 100 "$file" | grep '^User: ' | tail -1 | sed 's/^User: //'
+}
+
 # Clear the stored conversation (starts a fresh chat).
 bash-ai-reset() {
     rm -f "$(_bash_ai_conv_file)"
@@ -185,13 +194,21 @@ _bash_ai_query() {
 
     # Answer mode: feed back previous Q/A turns so follow-up questions
     # keep conversation context, and prepend web search results to the
-    # query. Search runs on the raw query; the Gemini backend grounds
-    # inline (and "off" disables search).
+    # query. When a conversation exists, the search query combines the
+    # last question with the current one so results stay on-topic
+    # ("what was the old cap" searches as "cap of india what was the old
+    # cap"). The Gemini backend grounds inline (and "off" disables search).
     if [[ "$mode" == "answer" ]]; then
         backend="$(_bash_ai_resolve_search_backend)"
         if [[ "$backend" != "gemini" ]]; then
+            local search_query="$query"
+            local last_q
+            last_q="$(_bash_ai_conv_last_question)"
+            if [[ -n "$last_q" && "$last_q" != "$query" ]]; then
+                search_query="$last_q $query"
+            fi
             local search_ctx
-            search_ctx="$(_bash_ai_web_search "$query")"
+            search_ctx="$(_bash_ai_web_search "$search_query")"
             if [[ -n "$search_ctx" ]]; then
                 query=$(printf '%s\n\n%s' "$query" "$search_ctx")
             fi
