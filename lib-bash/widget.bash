@@ -118,4 +118,11 @@ _bash_ai_init_widget() {
         bind -m vi-insert -x '"\C-g": _bash_ai_trigger'
         bind -m vi-insert -x "\"${BASH_AI_ANSWER_KEY:-\C-h}\": _bash_ai_answer"
     fi
+
+    # Conversation memory: after every command, clear the stored thread
+    # unless the command was another search. Appended (never clobbering
+    # the user's own PROMPT_COMMAND) and guarded against double-sourcing.
+    if [[ "$PROMPT_COMMAND" != *"_bash_ai_conv_keep_or_clear"* ]]; then
+        PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}_bash_ai_conv_keep_or_clear"
+    fi
 }

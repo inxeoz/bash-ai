@@ -640,6 +640,32 @@ test_conversation_gives_search_thread_context() {
     teardown_test_env
 }
 
+test_conversation_cleared_when_previous_command_not_search() {
+    setup_test_env
+    source "$PLUGIN_DIR/lib-bash/utils.bash"
+
+    _bash_ai_conv_append "q1" "a1"
+    # A plain command between searches must drop the thread
+    history() { echo "  42  ls -la"; }
+    _bash_ai_conv_keep_or_clear
+    assert_equals "$(_bash_ai_conv_context)" ""
+
+    teardown_test_env
+}
+
+test_conversation_kept_when_previous_command_was_search() {
+    setup_test_env
+    source "$PLUGIN_DIR/lib-bash/utils.bash"
+
+    _bash_ai_conv_append "q1" "a1"
+    # A consecutive search keeps the thread
+    history() { echo "  42  bash-ai-answer \"cap of india\""; }
+    _bash_ai_conv_keep_or_clear
+    assert_contains "$(_bash_ai_conv_context)" "q1"
+
+    teardown_test_env
+}
+
 test_conversation_reset_clears_memory() {
     setup_test_env
     source "$PLUGIN_DIR/lib-bash/utils.bash"
@@ -852,6 +878,8 @@ run_test "Conversation context feeds follow-up questions" test_conversation_cont
 run_test "Conversation keeps only the newest turns" test_conversation_turn_cap
 run_test "Conversation last question is tracked" test_conversation_last_question
 run_test "Conversation gives follow-up search thread context" test_conversation_gives_search_thread_context
+run_test "Conversation cleared when previous command was not a search" test_conversation_cleared_when_previous_command_not_search
+run_test "Conversation kept when previous command was a search" test_conversation_kept_when_previous_command_was_search
 run_test "Conversation reset clears memory" test_conversation_reset_clears_memory
 run_test "bash-ai-answer stores the turn in the conversation" test_bash_ai_answer_stores_conversation_turn
 run_test "bash-ai-answer prints multiline response" test_bash_ai_answer_prints_multiline_response

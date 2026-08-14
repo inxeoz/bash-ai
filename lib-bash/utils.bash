@@ -170,6 +170,19 @@ _bash_ai_conv_context() {
     ' < "$file"
 }
 
+# PROMPT_COMMAND hook: the conversation only carries between consecutive
+# searches. If the command that just completed was not an answer-mode
+# search (bash-ai-answer), the stored conversation is cleared so the next
+# search starts fresh. Consecutive Ctrl-F answers never run a command, so
+# PROMPT_COMMAND does not fire between them and the thread survives.
+_bash_ai_conv_keep_or_clear() {
+    [[ "${BASH_AI_CONVERSATION_TURNS:-6}" != "0" ]] || return 0
+    case "$(history 1 2>/dev/null)" in
+        *bash-ai-answer*) return 0 ;;
+    esac
+    rm -f "$(_bash_ai_conv_file)"
+}
+
 # The last stored user question; used to give follow-up web searches
 # thread context ("" when the conversation is empty).
 _bash_ai_conv_last_question() {
