@@ -121,6 +121,61 @@ _bash_ai_print_separator() {
     printf -- '-------------------------------\n'
 }
 
+# --- Answer-mode conversation memory -------------------------------------
+# The last BASH_AI_CONVERSATION_TURNS Q/A pairs are stored in
+# BASH_AI_CONVERSATION_FILE (one block per turn, separated by a marker
+# line) and fed back to the model, so follow-up questions keep context.
+_bash_ai_conv_file() {
+    printf '%s' "${BASH_AI_CONVERSATION_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/bash-ai/conversation.log}"
+}
+
+# Append one Q/A turn and keep only the most recent BASH_AI_CONVERSATION_TURNS.
+_bash_ai_conv_append() {
+    local q="$1" a="$2"
+    local n="${BASH_AI_CONVERSATION_TURNS:-6}"
+    [[ "$n" == "0" ]] && return 0
+    local file
+    file="$(_bash_ai_conv_file)"
+    mkdir -p "$(dirname "$file")" 2>/dev/null
+
+    printf 'User: %s\nAssistant: %s\n\n==== bash-ai turn ====\n' "$q" "$a" >> "$file"
+
+    # Trim the file to the newest n turns
+    N="$n" perl -0777 -i -e '
+        my $n = $ENV{N};
+        my $s = <>;
+        my @t = split /\n==== bash-ai turn ====\n/, $s;
+        pop @t if @t && $t[-1] eq "";
+        @t = @t[-$n..-1] if @t > $n;
+        print join("\n==== bash-ai turn ====\n", @t), "\n==== bash-ai turn ====\n" if @t;
+    ' "$file"
+}
+
+# Read the stored turns back as a prompt block ("" when empty/disabled).
+_bash_ai_conv_context() {
+    local n="${BASH_AI_CONVERSATION_TURNS:-6}"
+    [[ "$n" == "0" ]] && return 0
+    local file
+    file="$(_bash_ai_conv_file)"
+    [[ -s "$file" ]] || return 0
+
+    N="$n" perl -0777 -e '
+        my $n = $ENV{N};
+        my $s = <STDIN>;
+        my @t = split /\n==== bash-ai turn ====\n/, $s;
+        pop @t if @t && $t[-1] eq "";
+        @t = @t[-$n..-1] if @t > $n;
+        print "Previous conversation:\n\n" if @t;
+        for my $t (@t) { print "$t\n" }
+    ' < "$file"
+}
+
+# Clear the stored conversation (starts a fresh chat).
+bash-ai-reset() {
+    rm -f "$(_bash_ai_conv_file)"
+    echo "bash-ai: conversation cleared"
+}
+
 # Main query function that routes to the appropriate provider
 # mode: "command" (default) or "answer"
 _bash_ai_query() {
@@ -128,8 +183,10 @@ _bash_ai_query() {
     local mode="${2:-command}"
     local backend=""
 
-    # Answer mode: prepend web search results to the query. Skipped when
-    # the backend is "gemini" (the Gemini provider grounds inline) or "off".
+    # Answer mode: feed back previous Q/A turns so follow-up questions
+    # keep conversation context, and prepend web search results to the
+    # query. Search runs on the raw query; the Gemini backend grounds
+    # inline (and "off" disables search).
     if [[ "$mode" == "answer" ]]; then
         backend="$(_bash_ai_resolve_search_backend)"
         if [[ "$backend" != "gemini" ]]; then
@@ -138,6 +195,11 @@ _bash_ai_query() {
             if [[ -n "$search_ctx" ]]; then
                 query=$(printf '%s\n\n%s' "$query" "$search_ctx")
             fi
+        fi
+        local conv_ctx
+        conv_ctx="$(_bash_ai_conv_context)"
+        if [[ -n "$conv_ctx" ]]; then
+            query=$(printf '%s\n\n%s' "$conv_ctx" "$query")
         fi
     fi
 
@@ -230,6 +292,8 @@ bash-ai-answer() {
         echo ""
         echo "Searches the web (free) and answers with properly formatted code examples."
         echo "In the shell, press Ctrl-F on a typed question instead."
+        echo ""
+        echo "Follow-up questions keep the conversation; run bash-ai-reset to start fresh."
         return 1
     fi
 
@@ -242,6 +306,9 @@ bash-ai-answer() {
     printf '\r\033[K'
 
     if (( exit_code == 0 )) && [[ -n "$answer" ]] && [[ "$answer" != "Error:"* ]] && [[ "$answer" != "API Error:"* ]]; then
+        # Remember the turn so follow-up questions keep context
+        _bash_ai_conv_append "$query" "$answer"
+
         # Render markdown through glow/mdcat/bat when available, else raw.
         # Separators frame the answer: query | answer | next prompt.
         printf '\n'

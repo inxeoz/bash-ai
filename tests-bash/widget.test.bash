@@ -263,6 +263,26 @@ test_answer_prints_multiline_response() {
     teardown_test_env
 }
 
+test_answer_stores_conversation_turn() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="test-key"
+
+    _bash_ai_query() {
+        printf 'The capital is New Delhi.'
+    }
+
+    local outfile
+    outfile=$(mktemp)
+    call_answer "$outfile" "cap of india"
+
+    assert_equals "$(grep -c 'User: cap of india' "$BASH_AI_CONVERSATION_FILE")" "1"
+    assert_equals "$(grep -c 'Assistant: The capital is New Delhi.' "$BASH_AI_CONVERSATION_FILE")" "1"
+
+    rm -f "$outfile"
+    teardown_test_env
+}
+
 test_answer_handles_api_errors() {
     setup_test_env
     export BASH_AI_PROVIDER="anthropic"
@@ -345,6 +365,7 @@ run_test "Inserts pending command on empty line" test_inserts_pending_command_on
 run_test "Ignores pending when line is not empty" test_ignores_pending_when_line_is_not_empty
 run_test "Empty line without pending shows hint" test_empty_line_without_pending_shows_hint
 run_test "Answer prints multiline response without touching the line" test_answer_prints_multiline_response
+run_test "Answer stores the turn in the conversation" test_answer_stores_conversation_turn
 run_test "Answer handles API errors gracefully" test_answer_handles_api_errors
 run_test "Answer empty line shows hint" test_answer_empty_line_shows_hint
 run_test "Answer renders through configured renderer" test_answer_renders_through_configured_renderer

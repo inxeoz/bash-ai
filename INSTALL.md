@@ -265,7 +265,14 @@ export BASH_AI_ANSWER_MAX_TOKENS="4096"       # answer-mode token budget
 export BASH_AI_ANSWER_KEY="\C-t"              # rebind if you use Ctrl-F for forward-char
 export BASH_AI_MARKDOWN_RENDERER="auto"       # auto | off | glow | mdcat | bat
 export BASH_AI_MARKDOWN_THEME="auto"          # glow scheme: auto | light | dark
+export BASH_AI_CONVERSATION_TURNS="6"         # previous Q/A turns fed back (0 = off)
 ```
+
+Answer mode keeps a conversation: after each answer, the last
+`BASH_AI_CONVERSATION_TURNS` question/answer pairs are fed back to the
+model, so follow-up questions ("and what about X?") keep context. Run
+`bash-ai-reset` to start a fresh conversation. The log lives at
+`~/.config/bash-ai/conversation.log`.
 
 Answers render through `glow`/`mdcat`/`bat` when one is installed and
 fall back to raw markdown text otherwise. Install a renderer with:

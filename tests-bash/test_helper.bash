@@ -195,6 +195,9 @@ setup_test_env() {
     # Isolated pending file for the bash-ai direct command
     export BASH_AI_PENDING_FILE="$(mktemp)"
 
+    # Isolated conversation memory so tests never touch the real log
+    export BASH_AI_CONVERSATION_FILE="$(mktemp)"
+
     # Deterministic output: tests override this when exercising rendering
     export BASH_AI_MARKDOWN_RENDERER="off"
 
@@ -215,6 +218,9 @@ teardown_test_env() {
     unset BASH_AI_MARKDOWN_RENDERER
     rm -f "$BASH_AI_PENDING_FILE"
     unset BASH_AI_PENDING_FILE
+    rm -f "$BASH_AI_CONVERSATION_FILE"
+    unset BASH_AI_CONVERSATION_FILE
+    unset BASH_AI_CONVERSATION_TURNS
 }
 
 # Assert string contains

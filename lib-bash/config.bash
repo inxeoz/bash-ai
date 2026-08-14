@@ -50,6 +50,11 @@
 : ${BASH_AI_SEARCH_BACKEND:="auto"}
 : ${BASH_AI_SEARCH_MAX_RESULTS:=5}  # Max web results fed to the model (DuckDuckGo backend)
 
+# Answer-mode conversation memory: previous Q/A turns are fed back to the
+# model so follow-up questions ("what about X?") keep context. 0 disables.
+: ${BASH_AI_CONVERSATION_TURNS:=6}
+: ${BASH_AI_CONVERSATION_FILE:="${XDG_CONFIG_HOME:-$HOME/.config}/bash-ai/conversation.log"}
+
 # Provider validation
 _bash_ai_validate_config() {
     if [[ "$BASH_AI_PROVIDER" != "anthropic" ]] && [[ "$BASH_AI_PROVIDER" != "ollama" ]] && [[ "$BASH_AI_PROVIDER" != "gemini" ]] && [[ "$BASH_AI_PROVIDER" != "qwen" ]] && [[ "$BASH_AI_PROVIDER" != "openai" ]] && [[ "$BASH_AI_PROVIDER" != "grok" ]] && [[ "$BASH_AI_PROVIDER" != "mistral" ]] && [[ "$BASH_AI_PROVIDER" != "custom" ]]; then

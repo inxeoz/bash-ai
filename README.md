@@ -184,10 +184,17 @@ export BASH_AI_ANSWER_KEY="\C-t"
 export BASH_AI_MARKDOWN_RENDERER="auto"   # auto | off | glow | mdcat | bat
 # glow color scheme: "auto" follows the system theme, or force it
 export BASH_AI_MARKDOWN_THEME="auto"      # auto | light | dark
+
+# Conversation memory: previous Q/A turns are fed back so follow-up
+# questions keep context (0 disables; stored in ~/.config/bash-ai/)
+export BASH_AI_CONVERSATION_TURNS="6"
 ```
 
 `bash-ai-answer "question"` is the direct-command equivalent (prints the
-answer, no pending file). Install a renderer for prettier output:
+answer, no pending file). Follow-ups keep the conversation: after an
+answer, the previous Q/A turns are fed back to the model, so "and what
+about X?" continues the thread. Run `bash-ai-reset` to start a fresh
+conversation. Install a renderer for prettier output:
 
 ```bash
 brew install glow        # or: sudo apt install glow

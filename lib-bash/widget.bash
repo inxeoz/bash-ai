@@ -78,6 +78,9 @@ _bash_ai_answer() {
     printf '\r\033[K'
 
     if (( exit_code == 0 )) && [[ -n "$answer" ]] && [[ "$answer" != "Error:"* ]] && [[ "$answer" != "API Error:"* ]]; then
+        # Remember the turn so follow-up questions keep context
+        _bash_ai_conv_append "$line" "$answer"
+
         # Render markdown through glow/mdcat/bat when available, else raw.
         # Separators frame the answer: query | answer | next prompt.
         printf '\n'
