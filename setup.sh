@@ -32,7 +32,7 @@ if [[ -d "$REPO_DIR/.git" ]]; then
     git -C "$REPO_DIR" pull --ff-only 2>/dev/null || echo "    (update skipped: uncommitted changes or no network)"
 else
     mkdir -p "$CONFIG_DIR"
-    git clone "$REPO_URL" "$REPO_DIR"
+    git clone --depth 1 "$REPO_URL" "$REPO_DIR"
 fi
 
 # --- 2. Create config.sh ------------------------------------------------
