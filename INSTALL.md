@@ -264,6 +264,7 @@ export BASH_AI_SEARCH_MAX_RESULTS="5"         # DuckDuckGo results cap
 export BASH_AI_ANSWER_MAX_TOKENS="4096"       # answer-mode token budget
 export BASH_AI_ANSWER_KEY="\C-t"              # rebind if you use Ctrl-F for forward-char
 export BASH_AI_MARKDOWN_RENDERER="auto"       # auto | off | glow | mdcat | bat
+export BASH_AI_MARKDOWN_THEME="auto"          # glow scheme: auto | light | dark
 ```
 
 Answers render through `glow`/`mdcat`/`bat` when one is installed and

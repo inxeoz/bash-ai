@@ -598,6 +598,102 @@ test_render_auto_uses_available_renderer() {
     teardown_test_env
 }
 
+test_render_glow_theme_selects_style() {
+    setup_test_env
+    export BASH_AI_MARKDOWN_RENDERER="glow"
+
+    glow() {
+        # Args are: -s <theme> -  (theme is \$2)
+        printf 'THEME:%s TEXT:%s' "$2" "$(cat)"
+    }
+
+    export BASH_AI_MARKDOWN_THEME="light"
+    local output
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "THEME:light TEXT:text"
+
+    export BASH_AI_MARKDOWN_THEME="dark"
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "THEME:dark TEXT:text"
+
+    # Unknown values behave like "auto"; with no system theme signals
+    # (empty HOME, gsettings unavailable) the resolver falls back to dark
+    local old_home="$HOME"
+    local test_dir
+    test_dir=$(create_test_dir)
+    export HOME="$test_dir"
+    export BASH_AI_MARKDOWN_THEME="neon"
+    gsettings() { return 1; }
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "THEME:dark TEXT:text"
+    unset -f gsettings
+    export HOME="$old_home"
+    cleanup_test_dir "$test_dir"
+
+    unset -f glow
+    unset BASH_AI_MARKDOWN_THEME
+    teardown_test_env
+}
+
+test_render_glow_auto_follows_system_theme() {
+    setup_test_env
+    export BASH_AI_MARKDOWN_RENDERER="glow"
+    export BASH_AI_MARKDOWN_THEME="auto"
+
+    glow() {
+        # Args are: -s <theme> -  (theme is \$2)
+        printf 'THEME:%s TEXT:%s' "$2" "$(cat)"
+    }
+
+    local old_home="$HOME"
+    local test_dir
+    local output
+
+    # Omarchy light theme: light.mode marker present
+    test_dir=$(create_test_dir)
+    export HOME="$test_dir"
+    mkdir -p "$HOME/.config/omarchy/current/theme"
+    touch "$HOME/.config/omarchy/current/theme/light.mode"
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "THEME:light TEXT:text"
+    export HOME="$old_home"
+    cleanup_test_dir "$test_dir"
+
+    # Omarchy dark theme: active theme dir without light.mode marker
+    test_dir=$(create_test_dir)
+    export HOME="$test_dir"
+    mkdir -p "$HOME/.config/omarchy/current/theme"
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "THEME:dark TEXT:text"
+    export HOME="$old_home"
+    cleanup_test_dir "$test_dir"
+
+    # No Omarchy: GTK color-scheme decides (gsettings mocked so it is deterministic)
+    test_dir=$(create_test_dir)
+    export HOME="$test_dir"
+    gsettings() { printf '%s\n' "'prefer-light'"; }
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "THEME:light TEXT:text"
+    unset -f gsettings
+
+    gsettings() { printf '%s\n' "'prefer-dark'"; }
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "THEME:dark TEXT:text"
+    unset -f gsettings
+
+    # No Omarchy and no usable gsettings: falls back to dark
+    gsettings() { return 1; }
+    output=$(_bash_ai_render_markdown "text")
+    assert_equals "$output" "THEME:dark TEXT:text"
+    unset -f gsettings
+    export HOME="$old_home"
+    cleanup_test_dir "$test_dir"
+
+    unset -f glow
+    unset BASH_AI_MARKDOWN_THEME
+    teardown_test_env
+}
+
 test_render_missing_renderer_falls_back_to_raw() {
     setup_test_env
     export BASH_AI_MARKDOWN_RENDERER="no-such-renderer-xyz"
@@ -640,5 +736,7 @@ run_test "bash-ai-answer handles API errors" test_bash_ai_answer_handles_api_err
 run_test "Render off passes through raw text" test_render_off_passes_through_raw
 run_test "Render explicit renderer pipes through it" test_render_explicit_renderer_pipes_through_it
 run_test "Render auto uses an available renderer" test_render_auto_uses_available_renderer
+run_test "Render glow theme selects light/dark style" test_render_glow_theme_selects_style
+run_test "Render glow auto follows the system theme" test_render_glow_auto_follows_system_theme
 run_test "Render missing renderer falls back to raw" test_render_missing_renderer_falls_back_to_raw
 finish_tests

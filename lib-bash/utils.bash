@@ -34,6 +34,40 @@ _bash_ai_escape_json() {
     printf '%s' "$1" | perl -0777 -pe 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g; s/\f/\\f/g; s/\x08/\\b/g; s/[\x00-\x07\x0B\x0E-\x1F]//g'
 }
 
+# Resolve the glow color scheme. BASH_AI_MARKDOWN_THEME:
+# "light"/"dark" = fixed scheme; anything else ("auto" default) = follow
+# the system theme: the active Omarchy theme's light.mode marker, then
+# the GTK color-scheme (gsettings); falls back to dark when undetectable.
+_bash_ai_resolve_markdown_theme() {
+    local theme="${BASH_AI_MARKDOWN_THEME:-auto}"
+    if [[ "$theme" == "light" || "$theme" == "dark" ]]; then
+        printf '%s' "$theme"
+        return 0
+    fi
+
+    # Omarchy marks light themes with a light.mode file in the active theme
+    if [[ -f "$HOME/.config/omarchy/current/theme/light.mode" ]]; then
+        printf 'light'
+        return 0
+    fi
+    if [[ -d "$HOME/.config/omarchy/current/theme" ]]; then
+        printf 'dark'
+        return 0
+    fi
+
+    # GTK color-scheme fallback (GNOME/GTK desktops)
+    if command -v gsettings &>/dev/null; then
+        local scheme
+        scheme="$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null)"
+        if [[ "$scheme" == *"prefer-light"* ]]; then
+            printf 'light'
+            return 0
+        fi
+    fi
+
+    printf 'dark'
+}
+
 # Render markdown answers through a terminal renderer when one is
 # available; print the raw text otherwise. BASH_AI_MARKDOWN_RENDERER:
 # "auto" (default) = first of glow/mdcat/bat found in PATH, else raw;
@@ -62,7 +96,11 @@ _bash_ai_render_markdown() {
 
     case "$cmd" in
         glow)
-            printf '%s\n' "$text" | glow -s dark -
+            # BASH_AI_MARKDOWN_THEME: "light" -> glow -s light,
+            # "dark" -> glow -s dark, "auto" -> follow the system theme.
+            local theme
+            theme="$(_bash_ai_resolve_markdown_theme)"
+            printf '%s\n' "$text" | glow -s "$theme" -
             ;;
         mdcat)
             printf '%s\n' "$text" | mdcat

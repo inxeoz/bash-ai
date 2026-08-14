@@ -182,6 +182,8 @@ export BASH_AI_ANSWER_KEY="\C-t"
 # Render answers through a terminal markdown renderer when one is
 # installed (glow/mdcat/bat), else print raw text
 export BASH_AI_MARKDOWN_RENDERER="auto"   # auto | off | glow | mdcat | bat
+# glow color scheme: "auto" follows the system theme, or force it
+export BASH_AI_MARKDOWN_THEME="auto"      # auto | light | dark
 ```
 
 `bash-ai-answer "question"` is the direct-command equivalent (prints the

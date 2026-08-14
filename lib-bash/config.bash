@@ -37,6 +37,10 @@
 # "auto" renders through the first of glow/mdcat/bat found in PATH and
 # prints raw text when none is installed; "off" always prints raw.
 : ${BASH_AI_MARKDOWN_RENDERER:="auto"}
+# Color scheme used when the renderer is glow: "light" renders with
+# `glow -s light`, "dark" with `glow -s dark`, "auto" (default) follows
+# the system theme (Omarchy light.mode marker, then GTK color-scheme).
+: ${BASH_AI_MARKDOWN_THEME:="auto"}
 
 # Web search configuration (answer mode only)
 # Backend: "auto" = Gemini grounding when BASH_AI_PROVIDER=gemini, else DuckDuckGo;
