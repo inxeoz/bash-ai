@@ -9,69 +9,69 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v3
-    
-    - name: Install ZSH
+
+    - name: Install bash and deps
       run: |
         sudo apt-get update
-        sudo apt-get install -y zsh curl
-    
+        sudo apt-get install -y curl perl
+
     - name: Test plugin loading
       run: |
-        zsh -c "
-          source zsh-ai.plugin.zsh
-          if [[ -z \"\$ZSH_AI_PROVIDER\" ]]; then
+        bash -c "
+          source bash-ai.plugin.bash
+          if [[ -z \"\$BASH_AI_PROVIDER\" ]]; then
             echo 'ERROR: Plugin failed to load'
             exit 1
           fi
           echo '✓ Plugin loaded successfully'
-          echo \"  Provider: \$ZSH_AI_PROVIDER\"
+          echo \"  Provider: \$BASH_AI_PROVIDER\"
         "
-    
+
     - name: Test configuration validation
       run: |
-        zsh -c "
-          source zsh-ai.plugin.zsh
-          
+        bash -c "
+          source bash-ai.plugin.bash
+
           # Test anthropic provider validation
-          export ZSH_AI_PROVIDER='anthropic'
+          export BASH_AI_PROVIDER='anthropic'
           export ANTHROPIC_API_KEY='test-key'
-          if _zsh_ai_validate_config; then
+          if _bash_ai_validate_config; then
             echo '✓ Anthropic provider validation passed'
           else
             echo 'ERROR: Anthropic provider validation failed'
             exit 1
           fi
-          
+
           # Test ollama provider validation
-          export ZSH_AI_PROVIDER='ollama'
-          if _zsh_ai_validate_config; then
+          export BASH_AI_PROVIDER='ollama'
+          if _bash_ai_validate_config; then
             echo '✓ Ollama provider validation passed'
           else
             echo 'ERROR: Ollama provider validation failed'
             exit 1
           fi
-          
+
           # Test invalid provider rejection
-          export ZSH_AI_PROVIDER='invalid'
-          if ! _zsh_ai_validate_config 2>/dev/null; then
+          export BASH_AI_PROVIDER='invalid'
+          if ! _bash_ai_validate_config 2>/dev/null; then
             echo '✓ Invalid provider correctly rejected'
           else
             echo 'ERROR: Invalid provider not rejected'
             exit 1
           fi
         "
-    
+
     - name: Test context detection
       run: |
-        zsh -c "
-          source zsh-ai.plugin.zsh
-          
+        bash -c "
+          source bash-ai.plugin.bash
+
           # Test project type detection
           touch package.json
-          project_type=\$(_zsh_ai_detect_project_type)
+          project_type=\$(_bash_ai_detect_project_type)
           if [[ \"\$project_type\" == 'node' ]]; then
             echo '✓ Node.js project detection works'
           else
@@ -79,10 +79,10 @@ jobs:
             exit 1
           fi
           rm package.json
-          
+
           # Test Python project detection
           touch requirements.txt
-          project_type=\$(_zsh_ai_detect_project_type)
+          project_type=\$(_bash_ai_detect_project_type)
           if [[ \"\$project_type\" == 'python' ]]; then
             echo '✓ Python project detection works'
           else
@@ -90,38 +90,35 @@ jobs:
             exit 1
           fi
         "
-    
-    - name: Test zsh-ai command exists
+
+    - name: Test bash-ai command exists
       run: |
-        zsh -c "
-          source zsh-ai.plugin.zsh
-          if command -v zsh-ai >/dev/null 2>&1; then
-            echo '✓ zsh-ai command is available'
+        bash -c "
+          source bash-ai.plugin.bash
+          if command -v bash-ai >/dev/null 2>&1; then
+            echo '✓ bash-ai command is available'
           else
-            echo 'ERROR: zsh-ai command not found'
+            echo 'ERROR: bash-ai command not found'
             exit 1
           fi
         "
-    
+
     - name: Run test suite
       run: |
-        # Make test runner executable
-        chmod +x run-tests.zsh
-        # Run all tests
-        ./run-tests.zsh
+        chmod +x run-tests-bash.sh
+        ./run-tests-bash.sh
 
   lint:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Install shellcheck
       run: |
         sudo apt-get update
         sudo apt-get install -y shellcheck
-    
+
     - name: Run shellcheck
       run: |
-        # Shellcheck all shell scripts (zsh files use bash compatibility mode)
-        find . -name "*.zsh" -o -name "*.sh" | xargs shellcheck -s bash -e SC1090,SC1091,SC2034,SC2154 || true
+        find . -name "*.bash" -o -name "*.sh" | xargs shellcheck -s bash -e SC1090,SC1091,SC2034,SC2154 || true

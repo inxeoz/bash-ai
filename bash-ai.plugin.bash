@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# bash-ai - AI-powered command suggestions for bash (port of zsh-ai)
+# bash-ai - AI-powered command suggestions for bash
 # Supports Anthropic Claude, Google Gemini, OpenAI, Mistral AI, Groq,
 # Qwen, and local Ollama models
 
