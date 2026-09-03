@@ -93,6 +93,19 @@ export BASH_AI_PROVIDER="openai"
 export OPENAI_API_KEY="your-key-here"
 ```
 
+Any OpenAI-compatible endpoint works via the `openai` provider (or alias `openai-compatible`):
+
+```bash
+# LM Studio
+export BASH_AI_PROVIDER="openai-compatible"
+export BASH_AI_OPENAI_URL="http://localhost:1234/v1/chat/completions"
+export BASH_AI_OPENAI_MODEL="your-model"
+
+# vLLM / LiteLLM / Groq (via openai) / custom proxy
+export BASH_AI_OPENAI_URL="https://proxy.example.com/v1/chat/completions"
+export BASH_AI_OPENAI_API_KEY="sk-..."
+```
+
 Add command preferences without replacing the built-in quoting rules:
 
 ```bash

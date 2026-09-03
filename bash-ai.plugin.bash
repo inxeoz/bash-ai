@@ -2,7 +2,7 @@
 
 # bash-ai - AI-powered command suggestions for bash
 # Supports Anthropic Claude, Google Gemini, OpenAI, Mistral AI, Groq, Grok,
-# Qwen, and local Ollama models
+# Qwen, local Ollama, and any OpenAI-compatible endpoint
 
 # Get the directory where this plugin is installed
 _BASH_AI_PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

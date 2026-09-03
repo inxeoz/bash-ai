@@ -3,7 +3,8 @@
 # Precedence: defaults < global < project < env
 
 [general]
-# provider: anthropic | openai | gemini | ollama | qwen | grok | groq | mistral | custom
+# provider: anthropic | openai | openai-compatible | gemini | ollama | qwen | grok | groq | mistral | custom
+# openai-compatible is an alias for openai with custom URL (LM Studio, vLLM, LiteLLM, etc.)
 provider = "openai"
 # optional custom prompt extension appended to system prompt
 prompt_extend = "Prefer rg over grep, fd over find."
@@ -16,6 +17,7 @@ prompt_extend = "Prefer rg over grep, fd over find."
 # answer_max_tokens = 4096
 
 [openai]
+# also works as [openai-compatible] or [compatible] — same settings
 model = "gpt-5.4-mini"
 url = "https://api.openai.com/v1/chat/completions"
 # thinking = ""   # 0 or 1

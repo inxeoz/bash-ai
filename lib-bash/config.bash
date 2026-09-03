@@ -91,8 +91,12 @@ unset _bash_ai_v
 
 # Provider validation
 _bash_ai_validate_config() {
+    # Normalize openai-compatible alias to openai
+    if [[ "$BASH_AI_PROVIDER" == "openai-compatible" || "$BASH_AI_PROVIDER" == "openai_compatible" || "$BASH_AI_PROVIDER" == "compatible" ]]; then
+        BASH_AI_PROVIDER="openai"
+    fi
     if [[ "$BASH_AI_PROVIDER" != "anthropic" ]] && [[ "$BASH_AI_PROVIDER" != "ollama" ]] && [[ "$BASH_AI_PROVIDER" != "gemini" ]] && [[ "$BASH_AI_PROVIDER" != "qwen" ]] && [[ "$BASH_AI_PROVIDER" != "openai" ]] && [[ "$BASH_AI_PROVIDER" != "grok" ]] && [[ "$BASH_AI_PROVIDER" != "groq" ]] && [[ "$BASH_AI_PROVIDER" != "mistral" ]] && [[ "$BASH_AI_PROVIDER" != "custom" ]]; then
-        echo "bash-ai: Error: Invalid provider '$BASH_AI_PROVIDER'. Use 'anthropic', 'ollama', 'gemini', 'openai', 'qwen', 'grok', 'groq', 'mistral', or 'custom'."
+        echo "bash-ai: Error: Invalid provider '$BASH_AI_PROVIDER'. Use 'anthropic', 'ollama', 'gemini', 'openai' (or 'openai-compatible'), 'grok', 'groq', 'mistral', or 'custom'."
         return 1
     fi
 
@@ -214,7 +218,12 @@ _bash_ai_load_toml_file() {
             case "$_section" in
                 general|provider|"")
                     case "$_key" in
-                        provider) _bash_ai_toml_try_set BASH_AI_PROVIDER "$_val" ;;
+                        provider)
+                            # Normalize toml alias openai-compatible -> openai
+                            if [[ "$_val" == "openai-compatible" || "$_val" == "openai_compatible" || "$_val" == "compatible" ]]; then
+                                _val="openai"
+                            fi
+                            _bash_ai_toml_try_set BASH_AI_PROVIDER "$_val" ;;
                         prompt_extend|prompt-extend) _bash_ai_toml_try_set BASH_AI_PROMPT_EXTEND "$_val" ;;
                         pending_file|pending-file) _bash_ai_toml_try_set BASH_AI_PENDING_FILE "$_val" ;;
                         conversation_turns|conversation-turns) _bash_ai_toml_try_set BASH_AI_CONVERSATION_TURNS "$_val" ;;
@@ -229,7 +238,7 @@ _bash_ai_load_toml_file() {
                     ;;
             esac
             case "$_section" in
-                openai)
+                openai|openai-compatible|openai_compatible|compatible)
                     case "$_key" in
                         model) _bash_ai_toml_try_set BASH_AI_OPENAI_MODEL "$_val" ;;
                         url) _bash_ai_toml_try_set BASH_AI_OPENAI_URL "$_val" ;;
