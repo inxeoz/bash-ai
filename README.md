@@ -88,6 +88,15 @@ Answer mode searches the web for free:
 
 Prompts typed before `Ctrl-G`/`Ctrl-F` are saved as commented history entries via `history -s "# {prompt}"` + `history -a` (with `HISTIGNORE`/`HISTCONTROL` bypass and `set -o history`). `history | tail` shows `# how to run ssh` then `ssh user@hostname`; `up` shows `# how to run ssh` first (safe, `Enter` does nothing as `#` is a comment). Previously used `builtin history` which failed in some setups — now uses plain `history -s`.
 
+## Features
+
+* **Providers:** `anthropic`, `openai` / `openai-compatible` (LM Studio `http://localhost:1234/v1`, vLLM, LiteLLM, any proxy), `groq` (`openai/gpt-oss-20b`), `grok` (xAI), `gemini`, `mistral`, `qwen`, `ollama` (local), `custom` (`_bash_ai_query_custom`)
+* **Generate:** `Ctrl-G` turns `how to run ssh` → `ssh user@hostname` in place (edit then `Enter`); `bash-ai "query"` + `,,` alias + pending `Ctrl-G` on empty line
+* **Answer:** `Ctrl-F` prints web search + fenced code (Gemini `googleSearch` or DuckDuckGo→Bing) + `bash-ai-answer`, conversation `BASH_AI_CONVERSATION_TURNS=6`, markdown via `glow/mdcat/bat`
+* **Safety:** risky `rm -rf /`, `mkfs`, `dd of=/dev/sda`, fork bomb etc → `Continue? [y/N]`; `curl -sN --connect-timeout 5 --max-time 60 --retry 2` + atomic `pending` + streaming
+* **Config:** env `BASH_AI_*` > project `./.bash-ai.toml` / `./bash-ai.toml` / `./.bash-ai/config.toml` > global `~/.config/bash-ai/config.toml` > defaults; `config.example.toml`; `setup.sh --reset` / `--remove`; `bash-ai --status` / `--version`
+* **Context:** `pwd` + files + `node/rust/python` detection + `git branch/status` + `OS` sent with query
+
 ## Configuration
 
 Switch providers with `BASH_AI_PROVIDER`:
