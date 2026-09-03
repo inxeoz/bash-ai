@@ -13,6 +13,7 @@ _bash_ai_toml_vars=(
     BASH_AI_QWEN_MODEL BASH_AI_QWEN_URL
     BASH_AI_ANTHROPIC_MODEL BASH_AI_ANTHROPIC_URL
     BASH_AI_GROK_MODEL BASH_AI_GROK_URL
+    BASH_AI_GROQ_MODEL BASH_AI_GROQ_URL BASH_AI_GROQ_REASONING_EFFORT BASH_AI_GROQ_API_KEY
     BASH_AI_MISTRAL_MODEL BASH_AI_MISTRAL_URL
     BASH_AI_PENDING_FILE
     BASH_AI_ANSWER_KEY BASH_AI_ANSWER_MAX_TOKENS
@@ -20,7 +21,7 @@ _bash_ai_toml_vars=(
     BASH_AI_SEARCH_BACKEND BASH_AI_SEARCH_MAX_RESULTS
     BASH_AI_CONVERSATION_TURNS BASH_AI_CONVERSATION_FILE
     BASH_AI_PROMPT_EXTEND
-    OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY QWEN_API_KEY XAI_API_KEY MISTRAL_API_KEY
+    OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY QWEN_API_KEY XAI_API_KEY MISTRAL_API_KEY GROQ_API_KEY BASH_AI_GROQ_API_KEY
 )
 for _bash_ai_v in "${_bash_ai_toml_vars[@]}"; do
     unset "_bash_ai_env_set_${_bash_ai_v}" 2>/dev/null
@@ -46,6 +47,10 @@ unset _bash_ai_v
 : ${BASH_AI_ANTHROPIC_URL:="https://api.anthropic.com/v1/messages"}  # Default Anthropic URL
 : ${BASH_AI_GROK_MODEL:="grok-4.3"}  # Default Grok model (provider sends reasoning_effort=none for speed)
 : ${BASH_AI_GROK_URL:="https://api.x.ai/v1/chat/completions"}  # Default Grok URL
+: ${BASH_AI_GROQ_MODEL:="openai/gpt-oss-20b"}  # Default Groq model (Groq-hosted, fast reasoning with low effort)
+: ${BASH_AI_GROQ_URL:="https://api.groq.com/openai/v1/chat/completions"}  # Default Groq URL
+: ${BASH_AI_GROQ_REASONING_EFFORT:=""}  # Groq reasoning effort: low | medium | high for gpt-oss models
+: ${BASH_AI_GROQ_API_KEY:=""}  # Optional alt to GROQ_API_KEY
 : ${BASH_AI_MISTRAL_MODEL:="mistral-small-latest"}  # Default Mistral model
 : ${BASH_AI_MISTRAL_URL:="https://api.mistral.ai/v1/chat/completions"}  # Default Mistral URL
 
@@ -86,8 +91,8 @@ unset _bash_ai_v
 
 # Provider validation
 _bash_ai_validate_config() {
-    if [[ "$BASH_AI_PROVIDER" != "anthropic" ]] && [[ "$BASH_AI_PROVIDER" != "ollama" ]] && [[ "$BASH_AI_PROVIDER" != "gemini" ]] && [[ "$BASH_AI_PROVIDER" != "qwen" ]] && [[ "$BASH_AI_PROVIDER" != "openai" ]] && [[ "$BASH_AI_PROVIDER" != "grok" ]] && [[ "$BASH_AI_PROVIDER" != "mistral" ]] && [[ "$BASH_AI_PROVIDER" != "custom" ]]; then
-        echo "bash-ai: Error: Invalid provider '$BASH_AI_PROVIDER'. Use 'anthropic', 'ollama', 'gemini', 'openai', 'qwen', 'grok', 'mistral', or 'custom'."
+    if [[ "$BASH_AI_PROVIDER" != "anthropic" ]] && [[ "$BASH_AI_PROVIDER" != "ollama" ]] && [[ "$BASH_AI_PROVIDER" != "gemini" ]] && [[ "$BASH_AI_PROVIDER" != "qwen" ]] && [[ "$BASH_AI_PROVIDER" != "openai" ]] && [[ "$BASH_AI_PROVIDER" != "grok" ]] && [[ "$BASH_AI_PROVIDER" != "groq" ]] && [[ "$BASH_AI_PROVIDER" != "mistral" ]] && [[ "$BASH_AI_PROVIDER" != "custom" ]]; then
+        echo "bash-ai: Error: Invalid provider '$BASH_AI_PROVIDER'. Use 'anthropic', 'ollama', 'gemini', 'openai', 'qwen', 'grok', 'groq', 'mistral', or 'custom'."
         return 1
     fi
 
@@ -128,6 +133,12 @@ _bash_ai_validate_config() {
         if [[ -z "$XAI_API_KEY" ]]; then
             echo "bash-ai: Warning: XAI_API_KEY not set. Plugin will not function."
             echo "bash-ai: Set XAI_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
+            return 1
+        fi
+    elif [[ "$BASH_AI_PROVIDER" == "groq" ]]; then
+        if [[ -z "$GROQ_API_KEY" && -z "$BASH_AI_GROQ_API_KEY" ]]; then
+            echo "bash-ai: Warning: GROQ_API_KEY not set. Plugin will not function."
+            echo "bash-ai: Set GROQ_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
             return 1
         fi
     elif [[ "$BASH_AI_PROVIDER" == "mistral" ]]; then
@@ -265,6 +276,14 @@ _bash_ai_load_toml_file() {
                         model) _bash_ai_toml_try_set BASH_AI_MISTRAL_MODEL "$_val" ;;
                         url) _bash_ai_toml_try_set BASH_AI_MISTRAL_URL "$_val" ;;
                         api_key|api-key) _bash_ai_toml_try_set MISTRAL_API_KEY "$_val" ;;
+                    esac
+                    ;;
+                groq)
+                    case "$_key" in
+                        model) _bash_ai_toml_try_set BASH_AI_GROQ_MODEL "$_val" ;;
+                        url) _bash_ai_toml_try_set BASH_AI_GROQ_URL "$_val" ;;
+                        reasoning_effort|reasoning-effort) _bash_ai_toml_try_set BASH_AI_GROQ_REASONING_EFFORT "$_val" ;;
+                        api_key|api-key) _bash_ai_toml_try_set GROQ_API_KEY "$_val"; _bash_ai_toml_try_set BASH_AI_GROQ_API_KEY "$_val" ;;
                     esac
                     ;;
                 search)

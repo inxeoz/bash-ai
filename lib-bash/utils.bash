@@ -253,6 +253,8 @@ _bash_ai_query() {
         _bash_ai_query_qwen "$query" "$mode"
     elif [[ "$BASH_AI_PROVIDER" == "grok" ]]; then
         _bash_ai_query_grok "$query" "$mode"
+    elif [[ "$BASH_AI_PROVIDER" == "groq" ]]; then
+        _bash_ai_query_groq "$query" "$mode"
     elif [[ "$BASH_AI_PROVIDER" == "mistral" ]]; then
         _bash_ai_query_mistral "$query" "$mode"
     elif [[ "$BASH_AI_PROVIDER" == "custom" ]]; then
@@ -299,6 +301,8 @@ _bash_ai_usage() {
         echo "Qwen model: $BASH_AI_QWEN_MODEL"
     elif [[ "$BASH_AI_PROVIDER" == "grok" ]]; then
         echo "Grok model: $BASH_AI_GROK_MODEL"
+    elif [[ "$BASH_AI_PROVIDER" == "groq" ]]; then
+        echo "Groq model: $BASH_AI_GROQ_MODEL"
     elif [[ "$BASH_AI_PROVIDER" == "mistral" ]]; then
         echo "Mistral model: $BASH_AI_MISTRAL_MODEL"
     fi
@@ -313,6 +317,7 @@ _bash_ai_status() {
         openai) echo "  model: $BASH_AI_OPENAI_MODEL"; echo "  url: $BASH_AI_OPENAI_URL" ;;
         qwen) echo "  model: $BASH_AI_QWEN_MODEL"; echo "  url: $BASH_AI_QWEN_URL" ;;
         grok) echo "  model: $BASH_AI_GROK_MODEL"; echo "  url: $BASH_AI_GROK_URL" ;;
+        groq) echo "  model: $BASH_AI_GROQ_MODEL"; echo "  url: $BASH_AI_GROQ_URL" ;;
         mistral) echo "  model: $BASH_AI_MISTRAL_MODEL"; echo "  url: $BASH_AI_MISTRAL_URL" ;;
         *) echo "  model: $BASH_AI_ANTHROPIC_MODEL"; echo "  url: $BASH_AI_ANTHROPIC_URL" ;;
     esac
@@ -323,6 +328,7 @@ _bash_ai_status() {
         openai) [[ -n "${OPENAI_API_KEY:-}" || -n "${BASH_AI_OPENAI_API_KEY:-}" ]] && key_status="***set" ;;
         qwen) [[ -n "${QWEN_API_KEY:-}" ]] && key_status="***set" ;;
         grok) [[ -n "${XAI_API_KEY:-}" ]] && key_status="***set" ;;
+        groq) [[ -n "${GROQ_API_KEY:-}" || -n "${BASH_AI_GROQ_API_KEY:-}" ]] && key_status="***set" ;;
         mistral) [[ -n "${MISTRAL_API_KEY:-}" ]] && key_status="***set" ;;
         ollama) key_status="n/a (local)" ;;
         custom) key_status="n/a (custom)" ;;

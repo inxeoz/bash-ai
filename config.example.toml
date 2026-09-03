@@ -3,7 +3,7 @@
 # Precedence: defaults < global < project < env
 
 [general]
-# provider: anthropic | openai | gemini | ollama | qwen | grok | mistral | custom
+# provider: anthropic | openai | gemini | ollama | qwen | grok | groq | mistral | custom
 provider = "openai"
 # optional custom prompt extension appended to system prompt
 prompt_extend = "Prefer rg over grep, fd over find."
@@ -44,6 +44,12 @@ url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 model = "grok-4.3"
 url = "https://api.x.ai/v1/chat/completions"
 # api_key = "..."
+
+[groq]
+model = "openai/gpt-oss-20b"
+url = "https://api.groq.com/openai/v1/chat/completions"
+# api_key = "gsk-..."  # GROQ_API_KEY
+# reasoning_effort = "low"  # low for gpt-oss to save tokens
 
 [mistral]
 model = "mistral-small-latest"
