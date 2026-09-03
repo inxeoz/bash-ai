@@ -84,6 +84,10 @@ Answer mode searches the web for free:
 - **Gemini provider**: real Google Search via the API's built-in `googleSearch` grounding.
 - **Every other provider**: DuckDuckGo results (no API key) fed to the model; falls back to Bing on bot challenge.
 
+## History
+
+Prompts typed before `Ctrl-G`/`Ctrl-F` are saved as commented history entries via `history -s "# {prompt}"` + `history -a` (with `HISTIGNORE`/`HISTCONTROL` bypass and `set -o history`). `history | tail` shows `# how to run ssh` then `ssh user@hostname`; `up` shows `# how to run ssh` first (safe, `Enter` does nothing as `#` is a comment). Previously used `builtin history` which failed in some setups — now uses plain `history -s`.
+
 ## Configuration
 
 Switch providers with `BASH_AI_PROVIDER`:
