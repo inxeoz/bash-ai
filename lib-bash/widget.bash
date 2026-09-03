@@ -68,8 +68,8 @@ _bash_ai_trigger() {
         HISTIGNORE=""
         HISTCONTROL=""
         set -o history 2>/dev/null || true
-        builtin history -s "# $line" 2>/dev/null || true
-        builtin history -a 2>/dev/null || true
+        history -s "# $line" 2>/dev/null || true
+        history -a 2>/dev/null || true
         HISTIGNORE="$_bash_ai_old_histignore"
         HISTCONTROL="$_bash_ai_old_histcontrol"
     }
@@ -122,8 +122,8 @@ _bash_ai_answer() {
         HISTIGNORE=""
         HISTCONTROL=""
         set -o history 2>/dev/null || true
-        builtin history -s "# $line" 2>/dev/null || true
-        builtin history -a 2>/dev/null || true
+        history -s "# $line" 2>/dev/null || true
+        history -a 2>/dev/null || true
         HISTIGNORE="$_bash_ai_old_histignore"
         HISTCONTROL="$_bash_ai_old_histcontrol"
     }
