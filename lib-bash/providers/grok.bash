@@ -43,7 +43,7 @@ EOF
 )
 
     # Call the API
-    response=$(curl -s "${BASH_AI_GROK_URL}" \
+    response=$(_bash_ai_curl "${BASH_AI_GROK_URL}" \
         --header "Authorization: Bearer $XAI_API_KEY" \
         --header "content-type: application/json" \
         --data "$json_payload" 2>&1)

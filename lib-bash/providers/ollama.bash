@@ -6,7 +6,7 @@
 # -f makes HTTP errors fail the check, so a wrong URL (e.g. a /v1 suffix
 # that 404s) is caught here instead of surfacing later as a parse error
 _bash_ai_check_ollama() {
-    if curl -sf "${BASH_AI_OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
+    if _bash_ai_curl -f "${BASH_AI_OLLAMA_URL}/api/tags" >/dev/null 2>&1; then
         return 0
     fi
     echo "Error: Ollama is not reachable at $BASH_AI_OLLAMA_URL"
@@ -48,7 +48,7 @@ EOF
 )
     
     # Call the API
-    response=$(curl -s "${BASH_AI_OLLAMA_URL}/api/generate" \
+    response=$(_bash_ai_curl "${BASH_AI_OLLAMA_URL}/api/generate" \
         --header "content-type: application/json" \
         --data "$json_payload")
     

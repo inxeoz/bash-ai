@@ -17,6 +17,30 @@
 # `bash-ai "..."` stages its command in a pending file; pressing Ctrl-G
 # on an empty line inserts it (bash has no print -z).
 
+_bash_ai_is_risky() {
+    local cmd="$1"
+    # rm -rf / , /* , ~ , ~/*
+    if printf '%s' "$cmd" | grep -Eq 'rm[[:space:]]+[^;|&]*-.*r.*f[^;|&]*[[:space:]]+/(\*)?([[:space:]]|;|\||&|$)'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq 'rm[[:space:]]+[^;|&]*-.*r.*f[^;|&]*[[:space:]]+~([/][*]?)?([[:space:]]|;|\||&|$)'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq 'mkfs\.'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq 'dd[[:space:]].*of=/dev/(sda|nvme|mmc)'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Fq ':(){:|:&};:'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq '(^|[;|&[:space:]])shutdown([[:space:]]|;|\||&|$)'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq '(^|[;|&[:space:]])reboot([[:space:]]|;|\||&|$)'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq '(^|[;|&[:space:]])halt([[:space:]]|;|\||&|$)'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq '(^|[;|&[:space:]])poweroff([[:space:]]|;|\||&|$)'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq 'init[[:space:]]+(0|6)([[:space:]]|;|$)'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq 'git[[:space:]]+push.*--force'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq 'git[[:space:]]+reset[[:space:]]+--hard'; then return 0; fi
+    if printf '%s' "$cmd" | grep -Eq 'chmod[[:space:]]+.*-R.*777.*[[:space:]]+/[[:space:]]*$' || printf '%s' "$cmd" | grep -Eq 'chmod[[:space:]]+.*777.*[[:space:]]+/[[:space:]]*($|;)' ; then return 0; fi
+    # also catch chmod -R 777 /
+    if printf '%s' "$cmd" | grep -Eq 'chmod.*-R.*777'; then
+        if printf '%s' "$cmd" | grep -Eq '[[:space:]]/[[:space:]]*($|;|\||&)' ; then return 0; fi
+    fi
+    if printf '%s' "$cmd" | grep -Eq 'chown[[:space:]]+.*-R'; then return 0; fi
+    return 1
+}
+
 _bash_ai_trigger() {
     local line="${READLINE_LINE:-}"
 
@@ -45,6 +69,16 @@ _bash_ai_trigger() {
     printf '\r\033[K'
 
     if (( exit_code == 0 )) && [[ -n "$cmd" ]] && [[ "$cmd" != "Error:"* ]] && [[ "$cmd" != "API Error:"* ]]; then
+        if _bash_ai_is_risky "$cmd"; then
+            printf '\n\033[31m⚠️  Risky command detected: %s\033[0m\n' "$cmd"
+            local ans
+            read -rp "Continue? [y/N] " ans || ans=""
+            if [[ "$ans" != [yY]* ]]; then
+                READLINE_LINE="$line"
+                READLINE_POINT="${#line}"
+                return 0
+            fi
+        fi
         READLINE_LINE="$cmd"
         READLINE_POINT="${#cmd}"
     else

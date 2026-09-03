@@ -61,7 +61,7 @@ EOF
 )
     
     # Call the API
-    response=$(curl -s "https://generativelanguage.googleapis.com/v1beta/models/${BASH_AI_GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}" \
+    response=$(_bash_ai_curl "https://generativelanguage.googleapis.com/v1beta/models/${BASH_AI_GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}" \
         --header "content-type: application/json" \
         --data "$json_payload" 2>&1)
     

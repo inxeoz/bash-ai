@@ -75,7 +75,7 @@ EOF
     local api_key="${BASH_AI_OPENAI_API_KEY:-$OPENAI_API_KEY}"
     [[ -n "$api_key" ]] && auth_args=(--header "Authorization: Bearer $api_key")
 
-    response=$(curl -s "${BASH_AI_OPENAI_URL}" \
+    response=$(_bash_ai_curl "${BASH_AI_OPENAI_URL}" \
         "${auth_args[@]}" \
         --header "content-type: application/json" \
         --data "$json_payload" 2>&1)

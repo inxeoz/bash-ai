@@ -36,7 +36,7 @@ EOF
 )
     
     # Call the API
-    response=$(curl -s "${BASH_AI_ANTHROPIC_URL}" \
+    response=$(_bash_ai_curl "${BASH_AI_ANTHROPIC_URL}" \
         --header "x-api-key: $ANTHROPIC_API_KEY" \
         --header "anthropic-version: 2023-06-01" \
         --header "content-type: application/json" \

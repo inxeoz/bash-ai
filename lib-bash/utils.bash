@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# Hardened curl wrapper fallback (config.bash also defines this; keep in
+# sync). Tests that source only utils still get the wrapper.
+if ! declare -F _bash_ai_curl >/dev/null 2>&1; then
+_bash_ai_curl() {
+    curl -sN --connect-timeout 5 --max-time 60 --retry 2 --retry-delay 1 "$@"
+}
+fi
+
 # Utility functions for bash-ai
 
 # Function to get the standardized system prompt for all providers
@@ -254,31 +262,121 @@ _bash_ai_query() {
     fi
 }
 
+_bash_ai_version() {
+    local v="0.5.0"
+    if [[ -n "${_BASH_AI_PLUGIN_DIR:-}" && -f "${_BASH_AI_PLUGIN_DIR}/VERSION" ]]; then
+        v="$(cat "${_BASH_AI_PLUGIN_DIR}/VERSION" 2>/dev/null | tr -d ' \r\n')"
+        [[ -z "$v" ]] && v="0.5.0"
+    elif [[ -f "VERSION" ]]; then
+        v="$(cat VERSION 2>/dev/null | tr -d ' \r\n')"
+        [[ -z "$v" ]] && v="0.5.0"
+    elif [[ -f "$(dirname "${BASH_SOURCE[0]}")/../VERSION" ]]; then
+        v="$(cat "$(dirname "${BASH_SOURCE[0]}")/../VERSION" 2>/dev/null | tr -d ' \r\n')"
+        [[ -z "$v" ]] && v="0.5.0"
+    fi
+    echo "bash-ai $v"
+}
+
+_bash_ai_usage() {
+    echo "Usage: bash-ai \"your natural language command\""
+    echo "Example: bash-ai \"find all python files modified today\""
+    echo ""
+    echo "Options:"
+    echo "  --help     Show this help"
+    echo "  --version  Show version"
+    echo "  --status   Show configuration status"
+    echo ""
+    echo "Answers (web search + code examples): bash-ai-answer \"your question\""
+    echo ""
+    echo "Current provider: $BASH_AI_PROVIDER"
+    if [[ "$BASH_AI_PROVIDER" == "ollama" ]]; then
+        echo "Ollama model: $BASH_AI_OLLAMA_MODEL"
+    elif [[ "$BASH_AI_PROVIDER" == "gemini" ]]; then
+        echo "Gemini model: $BASH_AI_GEMINI_MODEL"
+    elif [[ "$BASH_AI_PROVIDER" == "openai" ]]; then
+        echo "OpenAI model: $BASH_AI_OPENAI_MODEL"
+    elif [[ "$BASH_AI_PROVIDER" == "qwen" ]]; then
+        echo "Qwen model: $BASH_AI_QWEN_MODEL"
+    elif [[ "$BASH_AI_PROVIDER" == "grok" ]]; then
+        echo "Grok model: $BASH_AI_GROK_MODEL"
+    elif [[ "$BASH_AI_PROVIDER" == "mistral" ]]; then
+        echo "Mistral model: $BASH_AI_MISTRAL_MODEL"
+    fi
+}
+
+_bash_ai_status() {
+    echo "bash-ai status"
+    echo "  provider: $BASH_AI_PROVIDER"
+    case "$BASH_AI_PROVIDER" in
+        ollama) echo "  model: $BASH_AI_OLLAMA_MODEL"; echo "  url: $BASH_AI_OLLAMA_URL" ;;
+        gemini) echo "  model: $BASH_AI_GEMINI_MODEL"; echo "  url: https://generativelanguage.googleapis.com" ;;
+        openai) echo "  model: $BASH_AI_OPENAI_MODEL"; echo "  url: $BASH_AI_OPENAI_URL" ;;
+        qwen) echo "  model: $BASH_AI_QWEN_MODEL"; echo "  url: $BASH_AI_QWEN_URL" ;;
+        grok) echo "  model: $BASH_AI_GROK_MODEL"; echo "  url: $BASH_AI_GROK_URL" ;;
+        mistral) echo "  model: $BASH_AI_MISTRAL_MODEL"; echo "  url: $BASH_AI_MISTRAL_URL" ;;
+        *) echo "  model: $BASH_AI_ANTHROPIC_MODEL"; echo "  url: $BASH_AI_ANTHROPIC_URL" ;;
+    esac
+    local key_status="missing"
+    case "$BASH_AI_PROVIDER" in
+        anthropic) [[ -n "${ANTHROPIC_API_KEY:-}" ]] && key_status="***set" ;;
+        gemini) [[ -n "${GEMINI_API_KEY:-}" ]] && key_status="***set" ;;
+        openai) [[ -n "${OPENAI_API_KEY:-}" || -n "${BASH_AI_OPENAI_API_KEY:-}" ]] && key_status="***set" ;;
+        qwen) [[ -n "${QWEN_API_KEY:-}" ]] && key_status="***set" ;;
+        grok) [[ -n "${XAI_API_KEY:-}" ]] && key_status="***set" ;;
+        mistral) [[ -n "${MISTRAL_API_KEY:-}" ]] && key_status="***set" ;;
+        ollama) key_status="n/a (local)" ;;
+        custom) key_status="n/a (custom)" ;;
+    esac
+    echo "  api_key: $key_status"
+    local t
+    for t in curl perl jq; do
+        if command -v "$t" >/dev/null 2>&1; then
+            echo "  $t: found ($(command -v "$t"))"
+        else
+            echo "  $t: missing"
+        fi
+    done
+    if [[ -s "${BASH_AI_PENDING_FILE:-/tmp/bash-ai-pending}" ]]; then
+        echo "  pending: exists (${BASH_AI_PENDING_FILE})"
+    else
+        echo "  pending: none (${BASH_AI_PENDING_FILE:-/tmp/bash-ai-pending})"
+    fi
+    local cf
+    cf="$(_bash_ai_conv_file)"
+    if [[ -s "$cf" ]]; then
+        echo "  conversation: exists ($cf, $(wc -l < "$cf" 2>/dev/null | tr -d ' ') lines)"
+    else
+        echo "  conversation: none ($cf)"
+    fi
+    local global_toml="${XDG_CONFIG_HOME:-$HOME/.config}/bash-ai/config.toml"
+    local proj_toml1="./config.toml"
+    local proj_toml2="./bash-ai.toml"
+    if [[ -f "$global_toml" ]]; then
+        echo "  config.toml (global): exists ($global_toml)"
+    else
+        echo "  config.toml (global): missing ($global_toml)"
+    fi
+    if [[ -f "$proj_toml2" ]]; then
+        echo "  config.toml (project): exists ($proj_toml2)"
+    elif [[ -f "$proj_toml1" ]]; then
+        echo "  config.toml (project): exists ($proj_toml1)"
+    else
+        echo "  config.toml (project): missing (./config.toml or ./bash-ai.toml)"
+    fi
+}
+
 # Direct command: bash-ai "find large files modified this week"
 # Bash cannot push text into the prompt from a plain function, so the
 # generated command is staged in a pending file; pressing Ctrl-G on an
 # empty line inserts it (handled by the Ctrl-G hook in widget.bash).
 bash-ai() {
+    case "${1:-}" in
+        --version|-v) _bash_ai_version; return 0 ;;
+        --status) _bash_ai_status; return 0 ;;
+        --help|-h) _bash_ai_usage; return 0 ;;
+    esac
     if [[ $# -eq 0 ]]; then
-        echo "Usage: bash-ai \"your natural language command\""
-        echo "Example: bash-ai \"find all python files modified today\""
-        echo ""
-        echo "Answers (web search + code examples): bash-ai-answer \"your question\""
-        echo ""
-        echo "Current provider: $BASH_AI_PROVIDER"
-        if [[ "$BASH_AI_PROVIDER" == "ollama" ]]; then
-            echo "Ollama model: $BASH_AI_OLLAMA_MODEL"
-        elif [[ "$BASH_AI_PROVIDER" == "gemini" ]]; then
-            echo "Gemini model: $BASH_AI_GEMINI_MODEL"
-        elif [[ "$BASH_AI_PROVIDER" == "openai" ]]; then
-            echo "OpenAI model: $BASH_AI_OPENAI_MODEL"
-        elif [[ "$BASH_AI_PROVIDER" == "qwen" ]]; then
-            echo "Qwen model: $BASH_AI_QWEN_MODEL"
-        elif [[ "$BASH_AI_PROVIDER" == "grok" ]]; then
-            echo "Grok model: $BASH_AI_GROK_MODEL"
-        elif [[ "$BASH_AI_PROVIDER" == "mistral" ]]; then
-            echo "Mistral model: $BASH_AI_MISTRAL_MODEL"
-        fi
+        _bash_ai_usage
         return 1
     fi
 
@@ -294,9 +392,11 @@ bash-ai() {
     printf '\r\033[K'
 
     if (( exit_code == 0 )) && [[ -n "$cmd" ]] && [[ "$cmd" != "Error:"* ]] && [[ "$cmd" != "API Error:"* ]]; then
-        # Stage the command; the Ctrl-G hook inserts it on an empty line.
+        # Stage the command atomically; the Ctrl-G hook inserts it on an empty line.
         # The status line is green; the model's command stays uncolored.
-        printf '%s\n' "$cmd" > "$BASH_AI_PENDING_FILE"
+        local _bash_ai_tmp
+        _bash_ai_tmp=$(mktemp "${BASH_AI_PENDING_FILE}.tmp.XXXXXX")
+        printf '%s\n' "$cmd" > "$_bash_ai_tmp" && mv -f "$_bash_ai_tmp" "$BASH_AI_PENDING_FILE"
         printf '\033[32mCommand ready. Press Ctrl-G to insert:\033[0m\n'
         echo "$cmd"
     else

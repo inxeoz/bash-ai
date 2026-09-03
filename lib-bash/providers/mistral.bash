@@ -41,7 +41,7 @@ EOF
 )
     
     # Call the API
-    response=$(curl -s "${BASH_AI_MISTRAL_URL}" \
+    response=$(_bash_ai_curl "${BASH_AI_MISTRAL_URL}" \
         --header "Authorization: Bearer $MISTRAL_API_KEY" \
         --header "content-type: application/json" \
         --data "$json_payload" 2>&1)

@@ -90,6 +90,7 @@ fi
 # --- 3. Wire into ~/.bashrc ---------------------------------------------
 MARKER="# bash-ai - config lives in $CONFIG_FILE"
 if [[ -f "$BASHRC" ]] && grep -qF "$MARKER" "$BASHRC"; then
+    # shellcheck disable=SC2088
     say "~/.bashrc already wired, skipping"
 else
     mkdir -p "$(dirname "$BASHRC")"
@@ -98,3 +99,35 @@ else
 fi
 
 say "done. Open a new terminal or run: source $BASHRC"
+
+# --- 4. Verify setup ----------------------------------------------------
+say "verifying setup..."
+
+# dependencies
+for cmd in curl bash perl; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+        echo "  ✓ $cmd found"
+    else
+        echo "  ✗ $cmd missing"
+    fi
+done || true
+if command -v jq >/dev/null 2>&1; then
+    echo "  ✓ jq found (optional)"
+else
+    echo "  · jq not found (optional)"
+fi || true
+
+# plugin loads
+if bash -c "source \"$REPO_DIR/bash-ai.plugin.bash\" && _bash_ai_validate_config" >/dev/null 2>&1; then
+    echo "  ✓ plugin loads"
+else
+    echo "  ✗ plugin failed to load or config invalid" || true
+fi || true
+
+# API key placeholder
+if grep -q 'your-key-here' "$CONFIG_FILE" 2>/dev/null; then
+    echo "  ! API key is placeholder - edit $CONFIG_FILE"
+fi || true
+
+echo "  next: source \"$CONFIG_FILE\"  (or open new terminal)"
+echo '        bash-ai "list files by size"' 

@@ -32,7 +32,7 @@ _bash_ai_search_ddg() {
     local query="$1"
     local html
 
-    html=$(curl -sG --max-time 20 \
+    html=$(_bash_ai_curl -G \
         -A "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0" \
         "https://html.duckduckgo.com/html/" \
         --data-urlencode "q=$query" \
@@ -125,7 +125,7 @@ EOF
 )
 
     local response
-    response=$(curl -s --max-time 30 \
+    response=$(_bash_ai_curl \
         "https://generativelanguage.googleapis.com/v1beta/models/${BASH_AI_GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}" \
         --header "content-type: application/json" \
         --data "$json_payload" 2>&1)
@@ -148,7 +148,7 @@ _bash_ai_search_bing() {
     local query="$1"
     local html
 
-    html=$(curl -s --max-time 20 \
+    html=$(_bash_ai_curl \
         -A "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0" \
         "https://www.bing.com/search?q=${query// /+}&count=${BASH_AI_SEARCH_MAX_RESULTS:-5}&mkt=en-US" \
         2>/dev/null)
