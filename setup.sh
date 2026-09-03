@@ -5,14 +5,51 @@
 #   2. creates ~/.config/bash-ai/config.sh pointing at the clone
 #   3. wires the source line into ~/.bashrc (idempotent)
 #
-# Usage: ./setup.sh [repo-url] [install-dir]
+# Usage: ./setup.sh [options] [repo-url] [install-dir]
 #   repo-url     git URL to clone (default: this repo's origin)
 #   install-dir  install dir (default: ~/.config/bash-ai)
+#
+# Options:
+#   -r, --reset, --force, --clean   remove existing config.sh and recreate (backs up to .bak)
+#       --remove, --uninstall       remove config.sh and unwire ~/.bashrc
+#   -h, --help                      show help
 
 set -euo pipefail
 
 DEFAULT_URL="$(git -C "$(dirname "$0")" remote get-url origin 2>/dev/null || true)"
 DEFAULT_URL="${DEFAULT_URL:-git@github.com:inxeoz/bash-ai.git}"
+
+# --- parse options -------------------------------------------------------
+RESET=false
+REMOVE=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -r|--reset|--force|-f|--clean|--recreate)
+            RESET=true; shift ;;
+        --remove|--uninstall)
+            REMOVE=true; shift ;;
+        -h|--help)
+            cat <<'HELP_EOF'
+Usage: ./setup.sh [options] [repo-url] [install-dir]
+
+Options:
+  -r, --reset, --force, --clean   remove existing config.sh and recreate (backs up to .bak)
+      --remove, --uninstall       remove config.sh and unwire ~/.bashrc
+  -h, --help                      show help
+
+Examples:
+  ./setup.sh                      # normal install / update
+  ./setup.sh --reset              # remove existing config and recreate
+  ./setup.sh --remove             # remove config and unwire
+  ./setup.sh --reset <repo-url> <dir>  # reset with custom location
+HELP_EOF
+            exit 0
+            ;;
+        --) shift; break ;;
+        -*) echo "Unknown option: $1" >&2; echo "Try: ./setup.sh --help" >&2; exit 1 ;;
+        *) break ;;
+    esac
+done
 
 REPO_URL="${1:-$DEFAULT_URL}"
 CONFIG_DIR="${2:-$HOME/.config/bash-ai}"
@@ -22,9 +59,39 @@ BASHRC="$HOME/.bashrc"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 
+# --- 0. Handle --remove --------------------------------------------------
+if [[ "$REMOVE" == true ]]; then
+    say "removing bash-ai config..."
+    if [[ -f "$CONFIG_FILE" ]]; then
+        rm -f "$CONFIG_FILE"
+        say "removed $CONFIG_FILE"
+    else
+        say "no config at $CONFIG_FILE"
+    fi
+    # backup still kept as .bak if exists
+    if [[ -f "$BASHRC" ]] && grep -qF "# bash-ai - config lives in" "$BASHRC"; then
+        # remove the two lines added by setup (marker + source)
+        # use temp file for portability
+        tmp_bashrc=$(mktemp)
+        grep -vF "# bash-ai - config lives in" "$BASHRC" | grep -vF "source $CONFIG_FILE" > "$tmp_bashrc" || true
+        # only overwrite if we actually removed something (avoid truncating on grep failure)
+        if [[ -s "$tmp_bashrc" ]]; then
+            mv -f "$tmp_bashrc" "$BASHRC"
+        else
+            rm -f "$tmp_bashrc"
+        fi
+        say "unwired $BASHRC"
+    fi
+    say "done. Removed config. Repo at $REPO_DIR not deleted (remove manually if needed)."
+    exit 0
+fi
+
 say "bash-ai setup"
 echo "    repo:  $REPO_URL"
 echo "    into:  $CONFIG_DIR"
+if [[ "$RESET" == true ]]; then
+    echo "    reset:  true (existing config will be backed up and recreated)"
+fi
 
 # --- 1. Clone (or update) the repo -------------------------------------
 if [[ -d "$REPO_DIR/.git" ]]; then
@@ -37,14 +104,24 @@ fi
 
 # --- 2. Create config.sh ------------------------------------------------
 if [[ -f "$CONFIG_FILE" ]]; then
-    say "config.sh already exists, updating its plugin source line"
-    if grep -q 'bash-ai.plugin.bash' "$CONFIG_FILE"; then
-        sed -i "s|source .*bash-ai\.plugin\.bash.*$|source \"$REPO_DIR/bash-ai.plugin.bash\"|" "$CONFIG_FILE"
+    if [[ "$RESET" == true ]]; then
+        say "reset: backing up existing config to $CONFIG_FILE.bak and recreating"
+        cp -f "$CONFIG_FILE" "$CONFIG_FILE.bak"
+        say "backup saved to $CONFIG_FILE.bak"
+        rm -f "$CONFIG_FILE"
+        # fall through to creation block below
     else
-        printf '\n# bash-ai plugin (added by setup.sh)\nsource "%s"\n' "$REPO_DIR/bash-ai.plugin.bash" >> "$CONFIG_FILE"
+        say "config.sh already exists, updating its plugin source line"
+        say "hint: use --reset to remove existing config and recreate (./setup.sh --reset)"
+        if grep -q 'bash-ai.plugin.bash' "$CONFIG_FILE"; then
+            sed -i "s|source .*bash-ai\.plugin\.bash.*$|source \"$REPO_DIR/bash-ai.plugin.bash\"|" "$CONFIG_FILE"
+        else
+            printf '\n# bash-ai plugin (added by setup.sh)\nsource "%s"\n' "$REPO_DIR/bash-ai.plugin.bash" >> "$CONFIG_FILE"
+        fi
+        chmod 600 "$CONFIG_FILE"
     fi
-    chmod 600 "$CONFIG_FILE"
-else
+fi
+if [[ ! -f "$CONFIG_FILE" ]]; then
     say "creating $CONFIG_FILE"
     printf 'Groq API key (gsk-...), or leave empty for a placeholder: '
     read -r -s api_key
