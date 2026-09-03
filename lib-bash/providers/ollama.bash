@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+[[ -z "${_BASH_AI_PROVIDER_COMMON:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/common.bash"
+
 
 # Ollama API provider for bash-ai
 
@@ -15,24 +17,18 @@ _bash_ai_check_ollama() {
     return 1
 }
 
+
 # Function to call Ollama API
 _bash_ai_query_ollama() {
     local query="$1"
     local mode="${2:-command}"
     local response
     
-    # Build context
-    local context=$(_bash_ai_build_context)
-    local escaped_context=$(_bash_ai_escape_json "$context")
-    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context" "$mode")
-    local escaped_system_prompt=$(_bash_ai_escape_json "$system_prompt")
-    
-    # Answer mode gets a bigger token budget for code examples
+    _bash_ai_provider_init "$query" "$mode"
+    local escaped_query="$_bash_ai_provider_escaped_query"
+    local escaped_system_prompt="$_bash_ai_provider_escaped_system_prompt"
     local num_predict_param=""
-    [[ "$mode" == "answer" ]] && num_predict_param=$',\n    "num_predict": '"${BASH_AI_ANSWER_MAX_TOKENS:-4096}"
-    
-    # Prepare the JSON payload
-    local escaped_query=$(_bash_ai_escape_json "$query")
+    [[ "$mode" == "answer" ]] && num_predict_param=$',\n    "num_predict": '"$_bash_ai_provider_max_tokens"
     local json_payload=$(cat <<EOF
 {
     "model": "$BASH_AI_OLLAMA_MODEL",

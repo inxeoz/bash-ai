@@ -2,24 +2,18 @@
 
 # Qwen API provider for bash-ai
 
+[[ -z "${_BASH_AI_PROVIDER_COMMON:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/common.bash"
+
 # Function to call Qwen API
 _bash_ai_query_qwen() {
     local query="$1"
     local mode="${2:-command}"
     local response
     
-    # Build context
-    local context=$(_bash_ai_build_context)
-    local escaped_context=$(_bash_ai_escape_json "$context")
-    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context" "$mode")
-    local escaped_system_prompt=$(_bash_ai_escape_json "$system_prompt")
-
-    # Answer mode gets a bigger token budget for code examples
-    local max_tokens=256
-    [[ "$mode" == "answer" ]] && max_tokens="${BASH_AI_ANSWER_MAX_TOKENS:-4096}"
-    
-    # Prepare the JSON payload - escape quotes in the query
-    local escaped_query=$(_bash_ai_escape_json "$query")
+    _bash_ai_provider_init "$query" "$mode"
+    local escaped_query="$_bash_ai_provider_escaped_query"
+    local escaped_system_prompt="$_bash_ai_provider_escaped_system_prompt"
+    local max_tokens="$_bash_ai_provider_max_tokens"
 
     local json_payload=$(cat <<EOF
 {

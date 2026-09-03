@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Search — deep module. Single seam: _bash_ai_web_search(query) → block
+# Adapters: Scrape (ddg/bing HTML) and Grounding (gemini googleSearch tool)
+# Interface hides backend resolution + fallback chain. Orchestration knows only Search.
+# ponytail: two adapter kinds are enough; add Tavily before generalizing further
 
 # Web search for bash-ai answer mode (Ctrl-H)
 #

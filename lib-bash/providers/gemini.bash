@@ -2,6 +2,8 @@
 
 # Google Gemini API provider for bash-ai
 
+[[ -z "${_BASH_AI_PROVIDER_COMMON:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/common.bash"
+
 # Function to call Gemini API
 # mode: "command" (default) or "answer". In answer mode with the gemini
 # search backend, Google Search grounding is enabled inline so the model
@@ -12,15 +14,10 @@ _bash_ai_query_gemini() {
     local search_backend="${3:-auto}"
     local response
     
-    # Build context
-    local context=$(_bash_ai_build_context)
-    local escaped_context=$(_bash_ai_escape_json "$context")
-    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context" "$mode")
-    local escaped_system_prompt=$(_bash_ai_escape_json "$system_prompt")
-
-    # Answer mode gets a bigger token budget for code examples
-    local max_output_tokens=256
-    [[ "$mode" == "answer" ]] && max_output_tokens="${BASH_AI_ANSWER_MAX_TOKENS:-4096}"
+    _bash_ai_provider_init "$query" "$mode"
+    local max_output_tokens="$_bash_ai_provider_max_tokens"
+    local escaped_query="$_bash_ai_provider_escaped_query"
+    local escaped_system_prompt="$_bash_ai_provider_escaped_system_prompt"
 
     # Google Search grounding for answer mode (gemini backend)
     local grounding_tool=""
@@ -28,8 +25,7 @@ _bash_ai_query_gemini() {
         grounding_tool=$',\n    "tools": [\n        {\n            "googleSearch": {}\n        }\n    ]'
     fi
     
-    # Prepare the JSON payload - escape quotes in the query
-    local escaped_query=$(_bash_ai_escape_json "$query")
+    # Prepare the JSON payload
     local json_payload=$(cat <<EOF
 {
     "contents": [

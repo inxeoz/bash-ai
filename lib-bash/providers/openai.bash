@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+[[ -z "${_BASH_AI_PROVIDER_COMMON:-}" ]] && source "$(dirname "${BASH_SOURCE[0]}")/common.bash"
+
 
 # OpenAI API provider for bash-ai
 
@@ -9,24 +11,17 @@ _bash_ai_openai_supports_temperature() {
     [[ "$model" != gpt-5* && "$model" != o1* && "$model" != o3* && "$model" != o4* ]]
 }
 
+
 # Function to call OpenAI API
 _bash_ai_query_openai() {
     local query="$1"
     local mode="${2:-command}"
     local response
 
-    # Build context
-    local context=$(_bash_ai_build_context)
-    local escaped_context=$(_bash_ai_escape_json "$context")
-    local system_prompt=$(_bash_ai_get_system_prompt "$escaped_context" "$mode")
-    local escaped_system_prompt=$(_bash_ai_escape_json "$system_prompt")
-
-    # Prepare the JSON payload - escape quotes in the query
-    local escaped_query=$(_bash_ai_escape_json "$query")
-
-    # Answer mode gets a bigger token budget for code examples
-    local max_tokens=256
-    [[ "$mode" == "answer" ]] && max_tokens="${BASH_AI_ANSWER_MAX_TOKENS:-4096}"
+    _bash_ai_provider_init "$query" "$mode"
+    local escaped_query="$_bash_ai_provider_escaped_query"
+    local escaped_system_prompt="$_bash_ai_provider_escaped_system_prompt"
+    local max_tokens="$_bash_ai_provider_max_tokens"
 
     # Determine token parameter based on model (newer models use max_completion_tokens)
     local token_param="max_completion_tokens"
