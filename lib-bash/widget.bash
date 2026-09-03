@@ -64,11 +64,14 @@ _bash_ai_trigger() {
     # Save prompt as # comment - bypass HISTIGNORE="#*" and ensure history is on
     {
         local _bash_ai_old_histignore="${HISTIGNORE-}"
+        local _bash_ai_old_histcontrol="${HISTCONTROL-}"
         HISTIGNORE=""
+        HISTCONTROL=""
         set -o history 2>/dev/null || true
         builtin history -s "# $line" 2>/dev/null || true
         builtin history -a 2>/dev/null || true
         HISTIGNORE="$_bash_ai_old_histignore"
+        HISTCONTROL="$_bash_ai_old_histcontrol"
     }
     printf '⠋ Querying…'
     local cmd
@@ -115,11 +118,14 @@ _bash_ai_answer() {
     printf '\n%s\n' "$line"
     {
         local _bash_ai_old_histignore="${HISTIGNORE-}"
+        local _bash_ai_old_histcontrol="${HISTCONTROL-}"
         HISTIGNORE=""
+        HISTCONTROL=""
         set -o history 2>/dev/null || true
         builtin history -s "# $line" 2>/dev/null || true
         builtin history -a 2>/dev/null || true
         HISTIGNORE="$_bash_ai_old_histignore"
+        HISTCONTROL="$_bash_ai_old_histcontrol"
     }
     printf '⠋ Searching…'
     local answer
