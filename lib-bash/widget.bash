@@ -61,8 +61,15 @@ _bash_ai_trigger() {
     # Echo the query line, save prompt to history with # prefix (so accidental re-run is a comment),
     # then run the query synchronously
     printf '\n%s\n' "$line"
-    builtin history -s "# $line" 2>/dev/null || true
-    builtin history -a 2>/dev/null || true
+    # Save prompt as # comment - bypass HISTIGNORE="#*" and ensure history is on
+    {
+        local _bash_ai_old_histignore="${HISTIGNORE-}"
+        HISTIGNORE=""
+        set -o history 2>/dev/null || true
+        builtin history -s "# $line" 2>/dev/null || true
+        builtin history -a 2>/dev/null || true
+        HISTIGNORE="$_bash_ai_old_histignore"
+    }
     printf '⠋ Querying…'
     local cmd
     cmd="$(_bash_ai_query "$line" 2>/dev/null)"
@@ -106,8 +113,14 @@ _bash_ai_answer() {
 
     # Echo the query line, save prompt to history with # prefix, then run the answer query
     printf '\n%s\n' "$line"
-    builtin history -s "# $line" 2>/dev/null || true
-    builtin history -a 2>/dev/null || true
+    {
+        local _bash_ai_old_histignore="${HISTIGNORE-}"
+        HISTIGNORE=""
+        set -o history 2>/dev/null || true
+        builtin history -s "# $line" 2>/dev/null || true
+        builtin history -a 2>/dev/null || true
+        HISTIGNORE="$_bash_ai_old_histignore"
+    }
     printf '⠋ Searching…'
     local answer
     answer="$(_bash_ai_query "$line" "answer" 2>/dev/null)"
