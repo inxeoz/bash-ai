@@ -58,10 +58,11 @@ _bash_ai_trigger() {
         return 0
     fi
 
-    # Echo the query line, then run the query synchronously (backgrounding
-    # from an interactive bash prints a job spec: [1] pid), then replace
-    # the line with the generated command
+    # Echo the query line, save prompt to history with # prefix (so accidental re-run is a comment),
+    # then run the query synchronously
     printf '\n%s\n' "$line"
+    builtin history -s "# $line" 2>/dev/null || true
+    builtin history -a 2>/dev/null || true
     printf '⠋ Querying…'
     local cmd
     cmd="$(_bash_ai_query "$line" 2>/dev/null)"
@@ -103,8 +104,10 @@ _bash_ai_answer() {
         return 0
     fi
 
-    # Echo the query line, then run the answer query synchronously
+    # Echo the query line, save prompt to history with # prefix, then run the answer query
     printf '\n%s\n' "$line"
+    builtin history -s "# $line" 2>/dev/null || true
+    builtin history -a 2>/dev/null || true
     printf '⠋ Searching…'
     local answer
     answer="$(_bash_ai_query "$line" "answer" 2>/dev/null)"
