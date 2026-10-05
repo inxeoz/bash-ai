@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 
 # bash-ai - AI-powered command suggestions for bash
-# Deep modules: Config (toml adapter) → Prompt → Context → Conversation → Markdown → Queue/Risk/History → Search → Provider (common + adapters) → Orchestration → Widget
+# Deep modules: Config → Prompt → Context → Conversation → Markdown → Queue/Risk/History → Search → Provider (common + adapters) → Orchestration → Widget
 
 _BASH_AI_PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-source "${_BASH_AI_PLUGIN_DIR}/lib-bash/toml.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/config.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/prompt.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/context.bash"

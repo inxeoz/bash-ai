@@ -25,26 +25,23 @@ It is also small by design: bash plus `curl` and `perl`, no Node runtime, no Pyt
 
 ## Install
 
-One-shot install:
-
 ```bash
 ./setup.sh                      # clones into ~/.config/bash-ai/repo,
-                                # creates ~/.config/bash-ai/config.sh,
-                                # wires source line into ~/.bashrc
+                                # asks for your API key, prints the block to
+                                # paste into ~/.bashrc (edits nothing)
 ```
 
-Or manual — add to `~/.bashrc` above the source line:
+Or manual — add to `~/.bashrc`:
 
 ```bash
-export BASH_AI_PROVIDER="openai"
-export BASH_AI_OPENAI_URL="https://api.groq.com/openai/v1/chat/completions"
-export BASH_AI_OPENAI_MODEL="openai/gpt-oss-20b"
-export BASH_AI_OPENAI_API_KEY="your-key-here"
-export BASH_AI_OPENAI_REASONING_EFFORT="low"
+export BASH_AI_PROVIDER="groq"
+export GROQ_API_KEY="gsk-..."
+export BASH_AI_GROQ_REASONING_EFFORT="low"
+alias ,,='bash-ai '
 source ~/path/to/bash-ai.plugin.bash
 ```
 
-Keep API keys out of public dotfiles. Reload:
+There is no config file: `bash-ai` reads plain env vars, so `~/.bashrc` is the config. Keep API keys out of public dotfiles, then reload:
 
 ```bash
 source ~/.bashrc
@@ -94,10 +91,12 @@ Prompts typed before `Ctrl-G`/`Ctrl-F` are saved as commented history entries vi
 * **Generate:** `Ctrl-G` turns `how to run ssh` → `ssh user@hostname` in place (edit then `Enter`); `bash-ai "query"` + `,,` alias + pending `Ctrl-G` on empty line
 * **Answer:** `Ctrl-F` prints web search + fenced code (Gemini `googleSearch` or DuckDuckGo→Bing) + `bash-ai-answer`, conversation `BASH_AI_CONVERSATION_TURNS=6`, markdown via `glow/mdcat/bat`
 * **Safety:** risky `rm -rf /`, `mkfs`, `dd of=/dev/sda`, fork bomb etc → `Continue? [y/N]`; `curl -sN --connect-timeout 5 --max-time 60 --retry 2` + atomic `pending` + streaming
-* **Config:** env `BASH_AI_*` > project `./.bash-ai.toml` / `./bash-ai.toml` / `./.bash-ai/config.toml` > global `~/.config/bash-ai/config.toml` > defaults; `config.example.toml`; `setup.sh --reset` / `--remove`; `bash-ai --status` / `--version`
+* **Config:** env vars only — set `BASH_AI_*` / `GROQ_API_KEY` in `~/.bashrc` before sourcing the plugin; unset vars fall back to built-in defaults; `setup.sh --remove` prints uninstall steps; `bash-ai --status` / `--version`
 * **Context:** `pwd` + files + `node/rust/python` detection + `git branch/status` + `OS` sent with query
 
 ## Configuration
+
+Everything is an env var in `~/.bashrc`, set before the `source` line. Anything you leave unset falls back to the default in `lib-bash/config.bash`; `bash-ai --status` prints what the plugin ended up with.
 
 Switch providers with `BASH_AI_PROVIDER`:
 

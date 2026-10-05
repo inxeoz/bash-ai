@@ -1,36 +1,10 @@
 #!/usr/bin/env bash
 
 # Configuration and validation for bash-ai
-
-# --- Env precedence tracking (env > toml > defaults) ---
-# Record which BASH_AI_* vars were explicitly set in env before defaults,
-# so TOML only overrides defaults, never env.
-_bash_ai_toml_vars=(
-    BASH_AI_PROVIDER
-    BASH_AI_OLLAMA_MODEL BASH_AI_OLLAMA_URL
-    BASH_AI_GEMINI_MODEL
-    BASH_AI_OPENAI_MODEL BASH_AI_OPENAI_URL BASH_AI_OPENAI_THINKING BASH_AI_OPENAI_REASONING_EFFORT BASH_AI_OPENAI_API_KEY
-    BASH_AI_QWEN_MODEL BASH_AI_QWEN_URL
-    BASH_AI_ANTHROPIC_MODEL BASH_AI_ANTHROPIC_URL
-    BASH_AI_GROK_MODEL BASH_AI_GROK_URL
-    BASH_AI_GROQ_MODEL BASH_AI_GROQ_URL BASH_AI_GROQ_REASONING_EFFORT BASH_AI_GROQ_API_KEY
-    BASH_AI_MISTRAL_MODEL BASH_AI_MISTRAL_URL
-    BASH_AI_PENDING_FILE
-    BASH_AI_ANSWER_KEY BASH_AI_ANSWER_MAX_TOKENS
-    BASH_AI_MARKDOWN_RENDERER BASH_AI_MARKDOWN_THEME
-    BASH_AI_SEARCH_BACKEND BASH_AI_SEARCH_MAX_RESULTS
-    BASH_AI_CONVERSATION_TURNS BASH_AI_CONVERSATION_FILE
-    BASH_AI_PROMPT_EXTEND
-    OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY QWEN_API_KEY XAI_API_KEY MISTRAL_API_KEY GROQ_API_KEY BASH_AI_GROQ_API_KEY
-)
-for _bash_ai_v in "${_bash_ai_toml_vars[@]}"; do
-    unset "_bash_ai_env_set_${_bash_ai_v}" 2>/dev/null
-done
-for _bash_ai_v in "${_bash_ai_toml_vars[@]}"; do
-    # Only treat non-empty value as env-set (empty string allows default/toml to fill)
-    eval "[[ -n \"\${${_bash_ai_v}:-}\" ]]" && printf -v "_bash_ai_env_set_${_bash_ai_v}" '%s' '1'
-done
-unset _bash_ai_v
+#
+# Config lives in your shell: set BASH_AI_* (and provider key) env vars in
+# ~/.bashrc before sourcing the plugin. `: ${VAR:=default}` below means env
+# wins, defaults fill the gaps.
 
 # Set default values for configuration
 : ${BASH_AI_PROVIDER:="anthropic"}  # Default to anthropic for backwards compatibility
@@ -162,20 +136,9 @@ _bash_ai_validate_config() {
     return 0
 }
 
-# --- TOML config support (global + per-project, env wins) ---
-
-# Try to set var to val, but respect env precedence (skip if env-set).
-# TOML adapter — deep module hides parsing (see lib-bash/toml.bash)
-_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -f "${_dir}/toml.bash" ]] && source "${_dir}/toml.bash"
-unset _dir
-
 # Hardened curl wrapper: timeout, retry, and no-buffer (streaming)
 # Tests mock `curl` via function override, so this wrapper still routes
 # through `curl` and remains mockable.
 _bash_ai_curl() {
     curl -sN --connect-timeout 5 --max-time 60 --retry 2 --retry-delay 1 "$@"
 }
-
-# Load after defaults so TOML overrides defaults but never env (env flags above)
-_bash_ai_load_toml

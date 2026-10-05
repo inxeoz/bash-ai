@@ -165,21 +165,6 @@ _bash_ai_status() {
     else
         echo "  conversation: none ($cf)"
     fi
-    local global_toml="${XDG_CONFIG_HOME:-$HOME/.config}/bash-ai/config.toml"
-    local proj_toml1="./config.toml"
-    local proj_toml2="./bash-ai.toml"
-    if [[ -f "$global_toml" ]]; then
-        echo "  config.toml (global): exists ($global_toml)"
-    else
-        echo "  config.toml (global): missing ($global_toml)"
-    fi
-    if [[ -f "$proj_toml2" ]]; then
-        echo "  config.toml (project): exists ($proj_toml2)"
-    elif [[ -f "$proj_toml1" ]]; then
-        echo "  config.toml (project): exists ($proj_toml1)"
-    else
-        echo "  config.toml (project): missing (./config.toml or ./bash-ai.toml)"
-    fi
 }
 
 # Direct command: bash-ai "find large files modified this week"

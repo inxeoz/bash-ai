@@ -2,16 +2,16 @@
 
 # setup.sh - installs bash-ai:
 #   1. clones the repo into ~/.config/bash-ai/repo
-#   2. creates ~/.config/bash-ai/config.sh pointing at the clone
-#   3. wires the source line into ~/.bashrc (idempotent)
+#   2. prints the block to paste into ~/.bashrc (never edits your rc file)
+#
+# Config is just env vars, so there is no config file to generate.
 #
 # Usage: ./setup.sh [options] [repo-url] [install-dir]
 #   repo-url     git URL to clone (default: this repo's origin)
 #   install-dir  install dir (default: ~/.config/bash-ai)
 #
 # Options:
-#   -r, --reset, --force, --clean   remove existing config.sh and recreate (backs up to .bak)
-#       --remove, --uninstall       remove config.sh and unwire ~/.bashrc
+#       --remove, --uninstall       print what to delete to uninstall
 #   -h, --help                      show help
 
 set -euo pipefail
@@ -20,12 +20,9 @@ DEFAULT_URL="$(git -C "$(dirname "$0")" remote get-url origin 2>/dev/null || tru
 DEFAULT_URL="${DEFAULT_URL:-git@github.com:inxeoz/bash-ai.git}"
 
 # --- parse options -------------------------------------------------------
-RESET=false
 REMOVE=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -r|--reset|--force|-f|--clean|--recreate)
-            RESET=true; shift ;;
         --remove|--uninstall)
             REMOVE=true; shift ;;
         -h|--help)
@@ -33,15 +30,13 @@ while [[ $# -gt 0 ]]; do
 Usage: ./setup.sh [options] [repo-url] [install-dir]
 
 Options:
-  -r, --reset, --force, --clean   remove existing config.sh and recreate (backs up to .bak)
-      --remove, --uninstall       remove config.sh and unwire ~/.bashrc
+      --remove, --uninstall       print what to delete to uninstall
   -h, --help                      show help
 
 Examples:
-  ./setup.sh                      # normal install / update
-  ./setup.sh --reset              # remove existing config and recreate
-  ./setup.sh --remove             # remove config and unwire
-  ./setup.sh --reset <repo-url> <dir>  # reset with custom location
+  ./setup.sh                      # install / update, print the ~/.bashrc block
+  ./setup.sh --remove             # print the uninstall steps
+  ./setup.sh <repo-url> <dir>     # install from a custom URL / location
 HELP_EOF
             exit 0
             ;;
@@ -54,44 +49,21 @@ done
 REPO_URL="${1:-$DEFAULT_URL}"
 CONFIG_DIR="${2:-$HOME/.config/bash-ai}"
 REPO_DIR="$CONFIG_DIR/repo"
-CONFIG_FILE="$CONFIG_DIR/config.sh"
-BASHRC="$HOME/.bashrc"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 
 # --- 0. Handle --remove --------------------------------------------------
 if [[ "$REMOVE" == true ]]; then
-    say "removing bash-ai config..."
-    if [[ -f "$CONFIG_FILE" ]]; then
-        rm -f "$CONFIG_FILE"
-        say "removed $CONFIG_FILE"
-    else
-        say "no config at $CONFIG_FILE"
-    fi
-    # backup still kept as .bak if exists
-    if [[ -f "$BASHRC" ]] && grep -qF "# bash-ai - config lives in" "$BASHRC"; then
-        # remove the two lines added by setup (marker + source)
-        # use temp file for portability
-        tmp_bashrc=$(mktemp)
-        grep -vF "# bash-ai - config lives in" "$BASHRC" | grep -vF "source $CONFIG_FILE" > "$tmp_bashrc" || true
-        # only overwrite if we actually removed something (avoid truncating on grep failure)
-        if [[ -s "$tmp_bashrc" ]]; then
-            mv -f "$tmp_bashrc" "$BASHRC"
-        else
-            rm -f "$tmp_bashrc"
-        fi
-        say "unwired $BASHRC"
-    fi
-    say "done. Removed config. Repo at $REPO_DIR not deleted (remove manually if needed)."
+    say "nothing to automate - delete these yourself:"
+    echo "    1. the bash-ai block in $HOME/.bashrc (source line + alias)"
+    echo "    2. rm -rf $CONFIG_DIR"
+    echo "    (older installs also have $CONFIG_DIR/config.sh - delete it too)"
     exit 0
 fi
 
 say "bash-ai setup"
 echo "    repo:  $REPO_URL"
 echo "    into:  $CONFIG_DIR"
-if [[ "$RESET" == true ]]; then
-    echo "    reset:  true (existing config will be backed up and recreated)"
-fi
 
 # --- 1. Clone (or update) the repo -------------------------------------
 if [[ -d "$REPO_DIR/.git" ]]; then
@@ -102,82 +74,42 @@ else
     git clone --depth 1 "$REPO_URL" "$REPO_DIR"
 fi
 
-# --- 2. Create config.sh ------------------------------------------------
-if [[ -f "$CONFIG_FILE" ]]; then
-    if [[ "$RESET" == true ]]; then
-        say "reset: backing up existing config to $CONFIG_FILE.bak and recreating"
-        cp -f "$CONFIG_FILE" "$CONFIG_FILE.bak"
-        say "backup saved to $CONFIG_FILE.bak"
-        rm -f "$CONFIG_FILE"
-        # fall through to creation block below
-    else
-        say "config.sh already exists, updating its plugin source line"
-        say "hint: use --reset to remove existing config and recreate (./setup.sh --reset)"
-        if grep -q 'bash-ai.plugin.bash' "$CONFIG_FILE"; then
-            sed -i "s|source .*bash-ai\.plugin\.bash.*$|source \"$REPO_DIR/bash-ai.plugin.bash\"|" "$CONFIG_FILE"
-        else
-            printf '\n# bash-ai plugin (added by setup.sh)\nsource "%s"\n' "$REPO_DIR/bash-ai.plugin.bash" >> "$CONFIG_FILE"
-        fi
-        chmod 600 "$CONFIG_FILE"
-    fi
+# --- 2. Print the ~/.bashrc block ----------------------------------------
+# Nothing is written to your rc or config: the plugin reads plain env vars,
+# so the block below is the whole configuration.
+printf 'Groq API key (gsk-...), or leave empty to set it later: '
+read -r -s api_key || api_key=""
+printf '\n'
+
+if [[ -n "$api_key" ]]; then
+    key_line="export GROQ_API_KEY=\"$api_key\""
+else
+    key_line='export GROQ_API_KEY="gsk-..."  # TODO: paste your key'
 fi
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    say "creating $CONFIG_FILE"
-    printf 'Groq API key (gsk-...), or leave empty for a placeholder: '
-    read -r -s api_key
-    printf '\n'
 
-    if [[ -n "$api_key" ]]; then
-        key_line="export BASH_AI_OPENAI_API_KEY=\"$api_key\""
-    else
-        key_line='export BASH_AI_OPENAI_API_KEY="your-key-here"'
-    fi
+cat <<EOF
 
-    cat > "$CONFIG_FILE" <<EOF
-#!/usr/bin/env bash
-
-# bash-ai - single-file config, aliases, and plugin load.
-# Sourced from ~/.bashrc with: source $CONFIG_FILE
+# bash-ai - add this block to ~/.bashrc, then: source ~/.bashrc
 #
-# Contains the API key, so keep this file private (chmod 600).
-
-# --- Provider (Groq, OpenAI-compatible) -------------------------------
-export BASH_AI_PROVIDER="openai"
-export BASH_AI_OPENAI_URL="https://api.groq.com/openai/v1/chat/completions"
-export BASH_AI_OPENAI_MODEL="openai/gpt-oss-20b"
-export BASH_AI_OPENAI_REASONING_EFFORT="low"  # gpt-oss burns the token budget on hidden reasoning otherwise
-$key_line
-
-# --- Usage --------------------------------------------------------------
 # Two ways to generate a command:
 #   1. Type a request and press Ctrl-G     (replaces the line, no prefix needed)
 #   2. ,, query                            (alias -> bash-ai -> Ctrl-G to insert)
 # Normal commands are never intercepted - bash keeps its native display.
+
+export BASH_AI_PROVIDER="groq"
+export BASH_AI_GROQ_REASONING_EFFORT="low"  # gpt-oss burns the token budget on hidden reasoning otherwise
+$key_line
+
 alias ,,='bash-ai '
 
 # Optional extras
 # export BASH_AI_PROMPT_EXTEND="Prefer rg over grep, fd over find, bat over cat."
 
-# --- Load the plugin ---------------------------------------------------
 source "$REPO_DIR/bash-ai.plugin.bash"
+
 EOF
-    chmod 600 "$CONFIG_FILE"
-fi
 
-# --- 3. Wire into ~/.bashrc ---------------------------------------------
-MARKER="# bash-ai - config lives in $CONFIG_FILE"
-if [[ -f "$BASHRC" ]] && grep -qF "$MARKER" "$BASHRC"; then
-    # shellcheck disable=SC2088
-    say "~/.bashrc already wired, skipping"
-else
-    mkdir -p "$(dirname "$BASHRC")"
-    printf '\n%s\nsource %s\n' "$MARKER" "$CONFIG_FILE" >> "$BASHRC"
-    say "added to ~/.bashrc"
-fi
-
-say "done. Open a new terminal or run: source $BASHRC"
-
-# --- 4. Verify setup ----------------------------------------------------
+# --- 3. Verify setup ----------------------------------------------------
 say "verifying setup..."
 
 # dependencies
@@ -201,10 +133,7 @@ else
     echo "  ✗ plugin failed to load or config invalid" || true
 fi || true
 
-# API key placeholder
-if grep -q 'your-key-here' "$CONFIG_FILE" 2>/dev/null; then
-    echo "  ! API key is placeholder - edit $CONFIG_FILE"
-fi || true
+[[ -n "$api_key" ]] || echo "  ! no API key given - set GROQ_API_KEY in ~/.bashrc"
 
-echo "  next: source \"$CONFIG_FILE\"  (or open new terminal)"
-echo '        bash-ai "list files by size"' 
+echo '  next: paste the block into ~/.bashrc, then: source ~/.bashrc'
+echo '        bash-ai "list files by size"'
