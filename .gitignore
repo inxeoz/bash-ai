@@ -1,1 +1,3 @@
 .npm
+# written by the default install (the clone lives at ~/.config/bash-ai)
+conversation.log

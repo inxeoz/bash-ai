@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
 # setup.sh - installs bash-ai:
-#   1. clones the repo into ~/.config/bash-ai/repo
+#   1. clones the repo (--depth 1) into ~/.config/bash-ai
 #   2. prints the block to paste into ~/.bashrc (never edits your rc file)
 #
 # Config is just env vars, so there is no config file to generate.
 #
 # Usage: ./setup.sh [options] [repo-url] [install-dir]
 #   repo-url     git URL to clone (default: this repo's origin)
-#   install-dir  install dir (default: ~/.config/bash-ai)
+#   install-dir  where the repo is cloned (default: ~/.config/bash-ai)
 #
 # Options:
 #       --remove, --uninstall       print what to delete to uninstall
@@ -48,7 +48,6 @@ done
 
 REPO_URL="${1:-$DEFAULT_URL}"
 CONFIG_DIR="${2:-$HOME/.config/bash-ai}"
-REPO_DIR="$CONFIG_DIR/repo"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 
@@ -66,12 +65,16 @@ echo "    repo:  $REPO_URL"
 echo "    into:  $CONFIG_DIR"
 
 # --- 1. Clone (or update) the repo -------------------------------------
-if [[ -d "$REPO_DIR/.git" ]]; then
-    say "repo already cloned at $REPO_DIR, updating..."
-    git -C "$REPO_DIR" pull --ff-only 2>/dev/null || echo "    (update skipped: uncommitted changes or no network)"
+if [[ -d "$CONFIG_DIR/.git" ]]; then
+    say "repo already cloned at $CONFIG_DIR, updating..."
+    git -C "$CONFIG_DIR" pull --ff-only 2>/dev/null || echo "    (update skipped: uncommitted changes or no network)"
+elif [[ -d "$CONFIG_DIR" ]] && [[ -n "$(ls -A "$CONFIG_DIR" 2>/dev/null)" ]]; then
+    echo "error: $CONFIG_DIR is not empty and is not a git clone (pre-clone-into-config-dir install?)" >&2
+    echo "       rm -rf $CONFIG_DIR && re-run, then paste the block setup.sh prints" >&2
+    exit 1
 else
-    mkdir -p "$CONFIG_DIR"
-    git clone --depth 1 "$REPO_URL" "$REPO_DIR"
+    mkdir -p "$(dirname "$CONFIG_DIR")"
+    git clone --depth 1 "$REPO_URL" "$CONFIG_DIR"
 fi
 
 # --- 2. Print the ~/.bashrc block ----------------------------------------
@@ -105,7 +108,7 @@ alias ,,='bash-ai '
 # Optional extras
 # export BASH_AI_PROMPT_EXTEND="Prefer rg over grep, fd over find, bat over cat."
 
-source "$REPO_DIR/bash-ai.plugin.bash"
+source "$CONFIG_DIR/bash-ai.plugin.bash"
 
 EOF
 
@@ -127,7 +130,7 @@ else
 fi || true
 
 # plugin loads
-if bash -c "source \"$REPO_DIR/bash-ai.plugin.bash\" && _bash_ai_validate_config" >/dev/null 2>&1; then
+if bash -c "source \"$CONFIG_DIR/bash-ai.plugin.bash\" && _bash_ai_validate_config" >/dev/null 2>&1; then
     echo "  ✓ plugin loads"
 else
     echo "  ✗ plugin failed to load or config invalid" || true

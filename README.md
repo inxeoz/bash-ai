@@ -26,7 +26,7 @@ It is also small by design: bash plus `curl` and `perl`, no Node runtime, no Pyt
 ## Install
 
 ```bash
-./setup.sh                      # clones into ~/.config/bash-ai/repo,
+./setup.sh                      # clones into ~/.config/bash-ai,
                                 # asks for your API key, prints the block to
                                 # paste into ~/.bashrc (edits nothing)
 ```
