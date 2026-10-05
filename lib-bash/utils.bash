@@ -24,6 +24,12 @@ _bash_ai_query() {
     local mode="${2:-command}"
     local backend=""
 
+    # Bad config is reported here, not at every shell startup
+    if [[ -n "${_bash_ai_config_err:-}" ]]; then
+        printf '%s\n' "$_bash_ai_config_err"
+        return 1
+    fi
+
     # Answer mode: feed back previous Q/A turns so follow-up questions
     # keep conversation context, and prepend web search results to the
     # query. When a conversation exists, the search query combines the

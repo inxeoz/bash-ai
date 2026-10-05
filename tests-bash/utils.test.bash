@@ -849,6 +849,34 @@ test_render_missing_renderer_falls_back_to_raw() {
     teardown_test_env
 }
 
+test_bad_config_is_reported_on_use_without_querying() {
+    setup_test_env
+    export BASH_AI_PROVIDER="anthropic"
+
+    # Restore the real functions (earlier tests may have overridden them)
+    source "$PLUGIN_DIR/lib-bash/utils.bash"
+
+    # What bash-ai.plugin.bash captures at startup instead of printing
+    _bash_ai_config_err="bash-ai: Warning: ANTHROPIC_API_KEY not set. Plugin will not function."
+
+    local provider_called=0
+    _bash_ai_query_anthropic() {
+        provider_called=1
+        echo "should-not-happen"
+    }
+
+    local output
+    output=$(_bash_ai_query "list files")
+    local result=$?
+
+    assert_equals "$result" "1"
+    assert_contains "$output" "ANTHROPIC_API_KEY not set"
+    assert_equals "$provider_called" "0"
+
+    unset _bash_ai_config_err
+    teardown_test_env
+}
+
 # Run tests
 echo "Running utils tests..."
 run_test "Routes to Anthropic provider when configured" test_routes_to_anthropic_provider
@@ -891,4 +919,5 @@ run_test "Render auto uses an available renderer" test_render_auto_uses_availabl
 run_test "Render glow theme selects light/dark style" test_render_glow_theme_selects_style
 run_test "Render glow auto follows the system theme" test_render_glow_auto_follows_system_theme
 run_test "Render missing renderer falls back to raw" test_render_missing_renderer_falls_back_to_raw
+run_test "Bad config reported on use without querying" test_bad_config_is_reported_on_use_without_querying
 finish_tests

@@ -26,6 +26,8 @@ source "${_BASH_AI_PLUGIN_DIR}/lib-bash/providers/mistral.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/utils.bash"
 source "${_BASH_AI_PLUGIN_DIR}/lib-bash/widget.bash"
 
-if _bash_ai_validate_config; then
-    _bash_ai_init_widget
-fi
+# Validate at startup but stay quiet: keep the result and report it only when
+# bash-ai is used (see _bash_ai_query). The call itself is still required -
+# it normalizes the openai-compatible alias that _bash_ai_query dispatches on.
+_bash_ai_config_err="$(_bash_ai_validate_config 2>&1)"
+_bash_ai_init_widget
