@@ -17,6 +17,11 @@ _bash_ai_check_ollama() {
     return 1
 }
 
+# Registry hook: verify Ollama is reachable before dispatching the query.
+_bash_ai_provider_ollama_precheck() {
+    _bash_ai_check_ollama
+}
+
 
 # Function to call Ollama API
 _bash_ai_query_ollama() {

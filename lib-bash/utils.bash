@@ -14,6 +14,7 @@ _dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 for _f in prompt conversation markdown queue context search; do
     [[ -f "${_dir}/${_f}.bash" ]] && source "${_dir}/${_f}.bash"
 done
+[[ -f "${_dir}/providers/registry.bash" ]] && source "${_dir}/providers/registry.bash"
 [[ -f "${_dir}/providers/common.bash" ]] && source "${_dir}/providers/common.bash"
 unset _dir _f
 
@@ -58,27 +59,20 @@ _bash_ai_query() {
         fi
     fi
 
-    if [[ "$BASH_AI_PROVIDER" == "ollama" ]]; then
-        # The check prints its own user-facing error when Ollama is unreachable
-        _bash_ai_check_ollama || return 1
-        _bash_ai_query_ollama "$query" "$mode"
-    elif [[ "$BASH_AI_PROVIDER" == "gemini" ]]; then
-        _bash_ai_query_gemini "$query" "$mode" "$backend"
-    elif [[ "$BASH_AI_PROVIDER" == "openai" ]]; then
-        _bash_ai_query_openai "$query" "$mode"
-    elif [[ "$BASH_AI_PROVIDER" == "qwen" ]]; then
-        _bash_ai_query_qwen "$query" "$mode"
-    elif [[ "$BASH_AI_PROVIDER" == "grok" ]]; then
-        _bash_ai_query_grok "$query" "$mode"
-    elif [[ "$BASH_AI_PROVIDER" == "groq" ]]; then
-        _bash_ai_query_groq "$query" "$mode"
-    elif [[ "$BASH_AI_PROVIDER" == "mistral" ]]; then
-        _bash_ai_query_mistral "$query" "$mode"
-    elif [[ "$BASH_AI_PROVIDER" == "custom" ]]; then
-        _bash_ai_query_custom "$query" "$mode"
-    else
-        _bash_ai_query_anthropic "$query" "$mode"
+    # Dispatch by naming convention: _bash_ai_query_<provider>. Providers
+    # are self-contained; an optional _bash_ai_provider_<name>_precheck
+    # hook (e.g. Ollama reachability) runs before the query.
+    local provider="$BASH_AI_PROVIDER"
+    local fn="_bash_ai_query_${provider}"
+    if ! declare -F "$fn" >/dev/null 2>&1; then
+        echo "bash-ai: Error: Provider '$provider' has no query implementation." >&2
+        return 1
     fi
+    local precheck="_bash_ai_provider_${provider}_precheck"
+    if declare -F "$precheck" >/dev/null 2>&1; then
+        "$precheck" || return 1
+    fi
+    "$fn" "$query" "$mode" "$backend"
 }
 
 _bash_ai_version() {
@@ -108,48 +102,34 @@ _bash_ai_usage() {
     echo "Answers (web search + code examples): bash-ai-answer \"your question\""
     echo ""
     echo "Current provider: $BASH_AI_PROVIDER"
-    if [[ "$BASH_AI_PROVIDER" == "ollama" ]]; then
-        echo "Ollama model: $BASH_AI_OLLAMA_MODEL"
-    elif [[ "$BASH_AI_PROVIDER" == "gemini" ]]; then
-        echo "Gemini model: $BASH_AI_GEMINI_MODEL"
-    elif [[ "$BASH_AI_PROVIDER" == "openai" ]]; then
-        echo "OpenAI model: $BASH_AI_OPENAI_MODEL"
-    elif [[ "$BASH_AI_PROVIDER" == "qwen" ]]; then
-        echo "Qwen model: $BASH_AI_QWEN_MODEL"
-    elif [[ "$BASH_AI_PROVIDER" == "grok" ]]; then
-        echo "Grok model: $BASH_AI_GROK_MODEL"
-    elif [[ "$BASH_AI_PROVIDER" == "groq" ]]; then
-        echo "Groq model: $BASH_AI_GROQ_MODEL"
-    elif [[ "$BASH_AI_PROVIDER" == "mistral" ]]; then
-        echo "Mistral model: $BASH_AI_MISTRAL_MODEL"
+    local label model
+    label="$(_bash_ai_provider_field "$BASH_AI_PROVIDER" label 2>/dev/null)"
+    model="$(_bash_ai_provider_field "$BASH_AI_PROVIDER" model 2>/dev/null)"
+    if [[ -n "$model" && "$model" != "-" ]]; then
+        echo "$label model: $model"
     fi
 }
 
 _bash_ai_status() {
     echo "bash-ai status"
     echo "  provider: $BASH_AI_PROVIDER"
-    case "$BASH_AI_PROVIDER" in
-        ollama) echo "  model: $BASH_AI_OLLAMA_MODEL"; echo "  url: $BASH_AI_OLLAMA_URL" ;;
-        gemini) echo "  model: $BASH_AI_GEMINI_MODEL"; echo "  url: https://generativelanguage.googleapis.com" ;;
-        openai) echo "  model: $BASH_AI_OPENAI_MODEL"; echo "  url: $BASH_AI_OPENAI_URL" ;;
-        qwen) echo "  model: $BASH_AI_QWEN_MODEL"; echo "  url: $BASH_AI_QWEN_URL" ;;
-        grok) echo "  model: $BASH_AI_GROK_MODEL"; echo "  url: $BASH_AI_GROK_URL" ;;
-        groq) echo "  model: $BASH_AI_GROQ_MODEL"; echo "  url: $BASH_AI_GROQ_URL" ;;
-        mistral) echo "  model: $BASH_AI_MISTRAL_MODEL"; echo "  url: $BASH_AI_MISTRAL_URL" ;;
-        *) echo "  model: $BASH_AI_ANTHROPIC_MODEL"; echo "  url: $BASH_AI_ANTHROPIC_URL" ;;
-    esac
+    local model url key_envs key_mode
+    model="$(_bash_ai_provider_field "$BASH_AI_PROVIDER" model 2>/dev/null)"
+    url="$(_bash_ai_provider_field "$BASH_AI_PROVIDER" url 2>/dev/null)"
+    key_envs="$(_bash_ai_provider_field "$BASH_AI_PROVIDER" key_envs 2>/dev/null)"
+    key_mode="$(_bash_ai_provider_field "$BASH_AI_PROVIDER" key_mode 2>/dev/null)"
+    [[ -n "$model" && "$model" != "-" ]] && echo "  model: $model"
+    [[ -n "$url" && "$url" != "-" ]] && echo "  url: $url"
     local key_status="missing"
-    case "$BASH_AI_PROVIDER" in
-        anthropic) [[ -n "${ANTHROPIC_API_KEY:-}" ]] && key_status="***set" ;;
-        gemini) [[ -n "${GEMINI_API_KEY:-}" ]] && key_status="***set" ;;
-        openai) [[ -n "${OPENAI_API_KEY:-}" || -n "${BASH_AI_OPENAI_API_KEY:-}" ]] && key_status="***set" ;;
-        qwen) [[ -n "${QWEN_API_KEY:-}" ]] && key_status="***set" ;;
-        grok) [[ -n "${XAI_API_KEY:-}" ]] && key_status="***set" ;;
-        groq) [[ -n "${GROQ_API_KEY:-}" || -n "${BASH_AI_GROQ_API_KEY:-}" ]] && key_status="***set" ;;
-        mistral) [[ -n "${MISTRAL_API_KEY:-}" ]] && key_status="***set" ;;
-        ollama) key_status="n/a (local)" ;;
-        custom) key_status="n/a (custom)" ;;
-    esac
+    if [[ "$key_mode" == "none" ]]; then
+        if [[ "$BASH_AI_PROVIDER" == "ollama" ]]; then
+            key_status="n/a (local)"
+        else
+            key_status="n/a (custom)"
+        fi
+    elif _bash_ai_provider_key_value "$key_envs" >/dev/null 2>&1; then
+        key_status="***set"
+    fi
     echo "  api_key: $key_status"
     local t
     for t in curl perl jq; do

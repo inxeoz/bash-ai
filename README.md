@@ -94,6 +94,30 @@ Prompts typed before `Ctrl-G`/`Ctrl-F` are saved as commented history entries vi
 * **Config:** env vars only — set `BASH_AI_*` / `GROQ_API_KEY` in `~/.bashrc` before sourcing the plugin; unset vars fall back to built-in defaults; `setup.sh --remove` prints uninstall steps; `bash-ai --status` / `--version`
 * **Context:** `pwd` + files + `node/rust/python` detection + `git branch/status` + `OS` sent with query
 
+## Adding a Provider
+
+The provider layer is registry-driven. A new provider needs one file and two
+registry edits:
+
+1. Add its name to `_BASH_AI_PROVIDERS` in `lib-bash/providers/registry.bash`.
+2. Add its metadata line to `_bash_ai_provider_spec()`:
+   `label | model | url | key_envs (space separated) | key_mode`
+   where `key_mode` is `required`, `optional`, or `none`.
+3. Create `lib-bash/providers/<name>.bash` defining
+   `_bash_ai_query_<name>()` (arguments: `query`, `mode`, `backend`) that
+   prints the model's reply and returns nonzero on failure.
+4. Add its `BASH_AI_<NAME>_*` defaults to `lib-bash/config.bash`.
+
+Dispatch, `--status`, `--help`, and API-key validation pick the provider up
+automatically. A provider file may also define two optional hooks:
+
+- `_bash_ai_provider_<name>_precheck` — runs before the query; nonzero aborts.
+- `_bash_ai_provider_<name>_validate` — extra configuration validation.
+
+For OpenAI-compatible APIs, `lib-bash/providers/common.bash` provides
+`_bash_ai_provider_extract_openai` for shared response parsing.
+
+
 ## Configuration
 
 Everything is an env var in `~/.bashrc`, set before the `source` line. Anything you leave unset falls back to the default in `lib-bash/config.bash`; `bash-ai --status` prints what the plugin ended up with.

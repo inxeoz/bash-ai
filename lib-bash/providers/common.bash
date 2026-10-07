@@ -43,7 +43,7 @@ _bash_ai_provider_extract_openai() {
         result=$(printf '%s' "$response" | perl -0777 -ne 'print $1 if /"content"\s*:\s*"((?:[^"\\]|\\.)*)"/s' 2>/dev/null | sed 's/\\n/\n/g; s/\\t/\t/g; s/\\r/\r/g; s/\\"/"/g; s/\\\\/\\/g')
         if [[ -z "$result" ]]; then
             error=$(printf '%s' "$response" | perl -0777 -ne 'print $1 if /"message"\s*:\s*"((?:[^"\\]|\\.)*)"/s' 2>/dev/null)
-            if [[ -n "$error" ]]; then echo "API Error: $error"; else echo "Error: Unable to parse response"; fi
+            if [[ -n "$error" ]]; then echo "API Error: $error"; else echo "Error: Unable to parse response (install jq for better reliability)"; fi
             return 1
         fi
     fi

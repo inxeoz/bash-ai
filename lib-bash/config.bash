@@ -63,74 +63,49 @@
 : ${BASH_AI_CONVERSATION_TURNS:=6}
 : ${BASH_AI_CONVERSATION_FILE:="${XDG_CONFIG_HOME:-$HOME/.config}/bash-ai/conversation.log"}
 
+# Provider metadata (labels, key rules, defaults) shared by validation, status and dispatch
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/providers/registry.bash"
+
+# The custom provider has no provider file: its only contract is a
+# user-defined _bash_ai_query_custom function.
+_bash_ai_provider_custom_validate() {
+    if ! declare -F _bash_ai_query_custom >/dev/null 2>&1; then
+        echo "bash-ai: Warning: _bash_ai_query_custom is not defined. Plugin will not function."
+        echo "bash-ai: Define _bash_ai_query_custom to use a custom provider."
+        return 1
+    fi
+}
+
 # Provider validation
+# Generic key check driven by the registry, plus an optional per-provider
+# _bash_ai_provider_<name>_validate hook for provider-specific rules.
 _bash_ai_validate_config() {
     # Normalize openai-compatible alias to openai
-    if [[ "$BASH_AI_PROVIDER" == "openai-compatible" || "$BASH_AI_PROVIDER" == "openai_compatible" || "$BASH_AI_PROVIDER" == "compatible" ]]; then
-        BASH_AI_PROVIDER="openai"
-    fi
-    if [[ "$BASH_AI_PROVIDER" != "anthropic" ]] && [[ "$BASH_AI_PROVIDER" != "ollama" ]] && [[ "$BASH_AI_PROVIDER" != "gemini" ]] && [[ "$BASH_AI_PROVIDER" != "qwen" ]] && [[ "$BASH_AI_PROVIDER" != "openai" ]] && [[ "$BASH_AI_PROVIDER" != "grok" ]] && [[ "$BASH_AI_PROVIDER" != "groq" ]] && [[ "$BASH_AI_PROVIDER" != "mistral" ]] && [[ "$BASH_AI_PROVIDER" != "custom" ]]; then
-        echo "bash-ai: Error: Invalid provider '$BASH_AI_PROVIDER'. Use 'anthropic', 'ollama', 'gemini', 'openai' (or 'openai-compatible'), 'grok', 'groq', 'mistral', or 'custom'."
+    case "$BASH_AI_PROVIDER" in
+        openai-compatible|openai_compatible|compatible) BASH_AI_PROVIDER="openai" ;;
+    esac
+
+    local provider="$BASH_AI_PROVIDER"
+    if ! _bash_ai_provider_known "$provider"; then
+        echo "bash-ai: Error: Invalid provider '$provider'. Use one of: ${_BASH_AI_PROVIDERS// /, }."
         return 1
     fi
 
-    # Check requirements based on provider
-    if [[ "$BASH_AI_PROVIDER" == "anthropic" ]]; then
-        if [[ -z "$ANTHROPIC_API_KEY" ]]; then
-            echo "bash-ai: Warning: ANTHROPIC_API_KEY not set. Plugin will not function."
-            echo "bash-ai: Set ANTHROPIC_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
+    local key_envs key_mode key_env
+    key_envs="$(_bash_ai_provider_field "$provider" key_envs)"
+    key_mode="$(_bash_ai_provider_field "$provider" key_mode)"
+    if [[ "$key_mode" == "required" ]]; then
+        key_env="${key_envs%% *}"
+        if ! _bash_ai_provider_key_value "$key_envs" >/dev/null; then
+            echo "bash-ai: Warning: $key_env not set. Plugin will not function."
+            echo "bash-ai: Set $key_env or use BASH_AI_PROVIDER=ollama for local models."
             return 1
         fi
-    elif [[ "$BASH_AI_PROVIDER" == "gemini" ]]; then
-        if [[ -z "$GEMINI_API_KEY" ]]; then
-            echo "bash-ai: Warning: GEMINI_API_KEY not set. Plugin will not function."
-            echo "bash-ai: Set GEMINI_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
-            return 1
-        fi
-    elif [[ "$BASH_AI_PROVIDER" == "openai" ]]; then
-        # Only require API key when using the default OpenAI URL
-        # Custom URLs (local servers, proxies) may not need authentication
-        if [[ -z "$OPENAI_API_KEY" && -z "$BASH_AI_OPENAI_API_KEY" && "$BASH_AI_OPENAI_URL" == "https://api.openai.com/v1/chat/completions" ]]; then
-            echo "bash-ai: Warning: OPENAI_API_KEY not set. Plugin will not function."
-            echo "bash-ai: Set OPENAI_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
-            return 1
-        fi
+    fi
 
-        if [[ -n "$BASH_AI_OPENAI_THINKING" && "$BASH_AI_OPENAI_THINKING" != "0" && "$BASH_AI_OPENAI_THINKING" != "1" ]]; then
-            echo "bash-ai: Error: BASH_AI_OPENAI_THINKING must be 0, 1, or unset."
-            return 1
-        fi
-
-    elif [[ "$BASH_AI_PROVIDER" == "qwen" ]]; then
-        if [[ -z "$QWEN_API_KEY" ]]; then
-            echo "bash-ai: Warning: QWEN_API_KEY not set. Plugin will not function."
-            echo "bash-ai: Set QWEN_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
-            return 1
-        fi
-    elif [[ "$BASH_AI_PROVIDER" == "grok" ]]; then
-        if [[ -z "$XAI_API_KEY" ]]; then
-            echo "bash-ai: Warning: XAI_API_KEY not set. Plugin will not function."
-            echo "bash-ai: Set XAI_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
-            return 1
-        fi
-    elif [[ "$BASH_AI_PROVIDER" == "groq" ]]; then
-        if [[ -z "$GROQ_API_KEY" && -z "$BASH_AI_GROQ_API_KEY" ]]; then
-            echo "bash-ai: Warning: GROQ_API_KEY not set. Plugin will not function."
-            echo "bash-ai: Set GROQ_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
-            return 1
-        fi
-    elif [[ "$BASH_AI_PROVIDER" == "mistral" ]]; then
-        if [[ -z "$MISTRAL_API_KEY" ]]; then
-            echo "bash-ai: Warning: MISTRAL_API_KEY not set. Plugin will not function."
-            echo "bash-ai: Set MISTRAL_API_KEY or use BASH_AI_PROVIDER=ollama for local models."
-            return 1
-        fi
-    elif [[ "$BASH_AI_PROVIDER" == "custom" ]]; then
-        if ! declare -F _bash_ai_query_custom >/dev/null 2>&1; then
-            echo "bash-ai: Warning: _bash_ai_query_custom is not defined. Plugin will not function."
-            echo "bash-ai: Define _bash_ai_query_custom to use a custom provider."
-            return 1
-        fi
+    local hook="_bash_ai_provider_${provider}_validate"
+    if declare -F "$hook" >/dev/null 2>&1; then
+        "$hook" || return 1
     fi
 
     return 0
