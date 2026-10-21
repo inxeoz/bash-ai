@@ -1,3 +1,15 @@
 .npm
 # written by the default install (the clone lives at ~/.config/bash-ai)
 conversation.log
+
+# never commit secrets or local config
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+config.toml
+.bash-ai.toml
+bash-ai.toml
+.bash-ai/
